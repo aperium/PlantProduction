@@ -148,7 +148,8 @@ tkt_hist_ln_file <- CP_path %>% dir_ls(regexp = "PS_TKT_HIST_LIN_[[:digit:]]{4}.
 tkt_hist_file <- file.path(CP_path, "PS_TKT_HIST.csv") |> path()
 item_data_file <- file.path(CP_path, "IM_ITEM.csv") |> path()
 
-
+# output path
+out_path <- "/Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstreet/Production Planning QC/Plant Sales and Orders/2024" |> path_home()
 ```
 
 
@@ -261,7 +262,8 @@ CP_summary <- tkt_hist_ln_data %>%
 
 
 CP_filtersummary <- CP_summary %>% 
-  filter(month >= 3,
+  filter(Store == 2,
+         month >= 3,
          month <= 6,
          year >= 2022,
          str_detect(Size, "4.5"),
@@ -273,14 +275,14 @@ CP_filtersummary <- CP_summary %>%
          !is.na(year),
          !is.na(week)) |> 
   dplyr::summarize(across(any_of(c("Quantity")), sum), .by= c(`Item number`, Size, Description, `Long Desc`, `Sub Departments`, year)) |>
-  mutate(category = case_when(Description |> str_to_lower() |> str_detect("(ipomea)|(potato[:space:]vine)") ~ "ipomea",
-                              Description |> str_to_lower() |> str_detect("(strobilanthes)|(persian[:space:]shield)") ~ "strobilanthes",
-                              Description |> str_to_lower() |> str_detect("(secretia)|(pallida)") ~ "secretia",
-                              Description |> str_to_lower() |> str_detect("duranta") ~ "duranta",
-                              Description |> str_to_lower() |> str_detect("lysmachia") ~ "lysmachia",
-                              Description |> str_to_lower() |> str_detect("vinca([:punct:]|[:space:])((vine)|(major))") ~ "vinca vine",
-                              Description |> str_to_lower() |> str_detect("wojo'?s?[:space:]?jem") ~ "vinca vine",
-                              Description |> str_to_lower() |> str_detect("dracena[:space:]((spike)|(indivisa))") ~ "dracena spike"))
+  mutate(category = case_when(Description |> paste(`Long Desc`) |> str_to_lower() |> str_detect("(ipomo?(ea)?)|(potato[:space:]vine)") ~ "ipomea",
+                              Description |> paste(`Long Desc`) |> str_to_lower() |> str_detect("(strobilanthes)|(persian[:space:]shield)") ~ "strobilanthes",
+                              Description |> paste(`Long Desc`) |> str_to_lower() |> str_detect("(secretia)|(pallida)") ~ "secretia",
+                              Description |> paste(`Long Desc`) |> str_to_lower() |> str_detect("duranta") ~ "duranta",
+                              Description |> paste(`Long Desc`) |> str_to_lower() |> str_detect("(lysi?machia)|(lysim)") ~ "lysimachia",
+                              Description |> paste(`Long Desc`) |> str_to_lower() |> str_detect("vinca([:punct:]|[:space:])((vine)|(major))") ~ "vinca vine",
+                              Description |> paste(`Long Desc`) |> str_to_lower() |> str_detect("wojo'?s?[:space:]?jem") ~ "vinca vine",
+                              Description |> paste(`Long Desc`) |> str_to_lower() |> str_detect("dracena[:space:]((spike)|(indivisa))") ~ "dracena spike"))
 
 # rm(CP_summary)
 ```
@@ -289,20 +291,10 @@ CP_filtersummary <- CP_summary %>%
 
 ```{r CP_export}
 
-CP_data %>%
-  # filter(year >= 2019) %>%
-  dplyr::arrange(year) %>%
-  dplyr::mutate(Quantity = if_else(is.na(Quantity)&(year==prediction_year), modelmean.fit, Quantity)) %>%
-  dplyr::select(year, `Item number`, Quantity, Size, week) %>%
-  tidyr::pivot_wider(names_from = year, values_from = Quantity) %>%
-  dplyr::left_join(item_data %>% select(`Item number`, Description), by=join_by(`Item number`)) %>%
-  dplyr::select(`Item number`, Description, Size, !c("Item number", Description, Size)) %>%
-  dplyr::rename("2024 Prediction" = `2024`) %>%
-  dplyr::mutate("2024 predicted % increase" = (`2024 Prediction`-`2023`)/`2023`) %>%
-  dplyr::arrange(desc(`2024 Prediction`)) %>%
+CP_filtersummary %>%
+  dplyr::arrange(Description, category, desc(year), Quantity) %>%
   as.data.frame() %>%
-  # xlsx::write.xlsx2(file = "4.5in-ball-2024analysis-v1.xlsx", sheetName = "CP_4.5in",row.names = FALSE, append = TRUE)
-  write_xlsx_flex("herbveg2024-sales-pred-v1.xlsx")
+  write_xlsx_flex(path(out_path,"GGSalesReportPremiumAnnu4_5Spring22-23.xlsx"))
 
 
 ```
