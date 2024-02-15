@@ -258,7 +258,7 @@ CP_summary <- tkt_hist_ln_data %>%
 #   pivot_wider(names_from = year, values_from = Quantity) %>%
 #   arrange(Description, Size,desc(`2023`))
 
-CP_summary$`Sub Departments` |> unique()
+
 
 CP_filtersummary <- CP_summary %>% 
   filter(month >= 3,
@@ -266,13 +266,19 @@ CP_filtersummary <- CP_summary %>%
          year >= 2022,
          str_detect(Size, "4.5"),
          Department %in% c("ANNU"),
-         !(str_detect(Size,"G")),
-         !(str_detect(Size,"Q")),
+         !(str_detect(Size,coll("G"))),
+         !(str_detect(Size,coll("Q"))),
          !(is.na(Description)|is.na(`Long Desc`)|(is.na(Size)&is.na(`Sub Departments`))),
          !is.na(`Item number`),
          !is.na(year),
          !is.na(week)) |> 
-  dplyr::summarize(across(any_of(c("Quantity")), sum), .by= c(`Item number`, Size, Description, `Long Desc`, `Sub Departments`, year)) 
+  dplyr::summarize(across(any_of(c("Quantity")), sum), .by= c(`Item number`, Size, Description, `Long Desc`, `Sub Departments`, year)) |>
+  mutate(category = case_when(Description |> str_detect(coll("strobilanthes")) ~ "strobilanthes",
+                              Description |> str_detect(coll("(secretia)|(pallida)")) ~ "secretia",
+                              Description |> str_detect(coll("duranta")) ~ "duranta",
+                              Description |> str_detect(coll("lysmachia")) ~ "lysmachia",
+                              Description |> str_detect(coll("vinca")&coll("vine")) ~ "vinca vine",
+                              Description |> str_detect(coll("dracena")&(coll("spike")|coll("indivisa"))) ~ "dracena spike"))
 
 # rm(CP_summary)
 ```
