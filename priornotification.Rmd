@@ -151,9 +151,6 @@ google_get_addresses <- function(query) {
   return(results)
 }
 
-# c("greenstreet gardens braddock road alexandria VA","giant e glebe Alexandria VA","the white house washington DC", "gateway arch St louis MO") |>
-# google_get_addresses()
-
 ```
 
 
