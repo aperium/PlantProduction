@@ -248,9 +248,8 @@ tkt_hist_ln_data %<>%
 CP_summary <- tkt_hist_ln_data %>%
   mutate(year = year(`Business date`),
          month = month(`Business date`),
-         week = isoweek(`Business date`),
-         grow_season = month %>% case_match(c(2:7) ~ 1, c(1,8:12) ~ 2)) %>%
-  dplyr::summarise(Quantity = sum(Quantity), .by = !c(Quantity, month, `Business date`))
+         week = isoweek(`Business date`)) %>%
+  dplyr::summarise(Quantity = sum(Quantity), .by = !c(Quantity, `Business date`))
 
 
 # CP_summary %>% 
@@ -259,18 +258,21 @@ CP_summary <- tkt_hist_ln_data %>%
 #   pivot_wider(names_from = year, values_from = Quantity) %>%
 #   arrange(Description, Size,desc(`2023`))
 
+CP_summary$`Sub Departments` |> unique()
+
 CP_filtersummary <- CP_summary %>% 
-  filter(grow_season ==1,
-         year >= 2019,
-         `Sub Departments` %in% c("VEGE","HERB"),
+  filter(month >= 3,
+         month <= 6,
+         year >= 2022,
+         str_detect(Size, "4.5"),
+         Department %in% c("ANNU"),
          !(str_detect(Size,"G")),
          !(str_detect(Size,"Q")),
          !(is.na(Description)|is.na(`Long Desc`)|(is.na(Size)&is.na(`Sub Departments`))),
          !is.na(`Item number`),
          !is.na(year),
          !is.na(week)) |> 
-  dplyr::summarize(across(any_of(c("Quantity")), sum), .by= c(`Item number`, Size, Description, `Long Desc`, `Sub Departments`, year, week)) |>
-  mutate(CP_uid = str_c(`Item number`,year, week) |> sapply(hash))
+  dplyr::summarize(across(any_of(c("Quantity")), sum), .by= c(`Item number`, Size, Description, `Long Desc`, `Sub Departments`, year)) 
 
 # rm(CP_summary)
 ```
