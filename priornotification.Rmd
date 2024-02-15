@@ -1,0 +1,272 @@
+---
+title: Prior Notifications for interstate shipping of regulated plant materials
+author: Daniel R. Williams ^[Director of Quality Control, Greenstreet Growers, Lothian,
+  MD] ^[PhD Candidate, Dept. of Ag. & Crop Science, Ohio State University, Columbus,  Ohio]
+date: 26 January 2024
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+# Abstract
+
+```{r setup, echo=FALSE, error=TRUE, message=TRUE, warning=TRUE, include=FALSE}
+# this block loads required packages and some custom functions. 
+
+#req_pkgs <- c("devtools", "rlang", "pkgbuild", "rmarkdown", "librarian", "BiocManager", "magrittr", "tidyselect", "tidyverse", "lubridate", "stats", "readr", "measurements", "knitr", "tidyr", "foreach", "forcats", "doParallel", "parallel", "fs", "purrr", "janitor", "readxl", "writexl", "fuzzyjoin", "Biostrings") # , "openxlsx", "xlsx", "gt", "plyr","bibtex","ggpubr","ggplot2", "ggpmisc", "firatheme", "stringdist", "pwr", "effectsize", "zipcodeR", "chromote", "rvest"
+#
+cran_pacs <- c("rlang", "pkgbuild","pak","librarian","rmarkdown", "BiocManager", "tidyselect", "tidyverse", "magrittr", "stats", "measurements", "knitr", "foreach", "doParallel", "parallel", "fs", "janitor", "stringr", "readxl", "writexl","fuzzyjoin", "chromote", "pdftools", "reticulate") # "rvest", "polite", "XML", "tabulizer"
+dev_pacs <- c("aperium/rutil")
+bioc_pacs <- c("Biostrings")
+py_pacs <- c("camelot-py")
+
+## function to quietly find list of packages
+find_package_quiet <- function(pkgs) unlist(find.package(pkgs, quiet = TRUE))
+install_as_needed <- function(pacs, inst_fun = install.packages, check_fun = find_package_quiet) {
+  inst_fun(setdiff(pacs,names(unlist(sapply(pacs,check_fun)))))
+}
+
+# install cran packs
+if (length(cran_pacs) > 0) install_as_needed(cran_pacs,install.packages)
+
+# install github dev packs
+if (length(dev_pacs)>0) {
+  if (!require("pak", quietly = TRUE)) install.packages("pak")
+  install_as_needed(dev_pacs,pak::pak)
+}
+
+# install bioc packs
+if (length(bioc_pacs)>0) {
+  if (!require("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+  # install_as_needed(c("DBI","xfun"))
+  BiocManager::install(version = "3.18", update = FALSE, ask=FALSE)
+  install_as_needed(bioc_pacs,BiocManager::install)
+}
+
+
+librarian::shelf(cran_pacs, bioc_pacs, dev_pacs, quiet = TRUE)
+installed_req_pkgs <- pak::pkg_status(c(cran_pacs, bioc_pacs, dev_pacs))$package
+loaded_pacs <- search() |> str_extract("(?<=:).*$") |> na.omit()
+
+
+# install python packs
+if (("reticulate" %in% loaded_pacs) & !py_available(initialize = TRUE)) install_python()
+if (py_available(initialize = TRUE) & (length(py_pacs)>0)) {
+  # py_exe()
+  # py_list_packages()$package
+  py_install(py_pacs)
+  # py_list_packages_names <- function(...) py_list_packages(...)$package
+  # install_as_needed(py_pacs, py_install, py_list_packages_names)
+}
+
+
+
+
+
+
+
+if((("readxl" %in% installed_req_pkgs)&is_empty(find_package_quiet("readxl")))|(("writexl" %in% installed_req_pkgs)&is_empty(find_package_quiet("writexl")))) librarian::shelf("ycphs/openxlsx") #load openxlsx if read-/write-xl not avail
+if(((("readxl" %in% installed_req_pkgs)&is_empty(find_package_quiet("readxl")))|(("writexl" %in% installed_req_pkgs)&is_empty(find_package_quiet("writexl"))))&(is_empty(find_package_quiet("openxlsx")))) librarian::shelf("colearendt/xlsx") # load xlsx if openxlsx not avail
+
+## register cores for foreach
+n_cores <- parallel::detectCores()
+# registerDoParallel(cores=n_cores)
+# stopImplicitCluster()
+
+
+```
+
+```{r xlxs_function, echo=FALSE, error=TRUE, message=TRUE, warning=TRUE, include=FALSE}
+# These are some sloppy workarounds for reading and writing data from and to excel files. Some of the readxl and writexl are preferred but they are not universally supported. If they are not installed, these functions use on of the other two packages for xlsx-file handling in the order of preference (openxlsx is preferred over xlsx). For simplicity and robustness many features of the packages are not accessible except where they can be translated 1-to-1 across all three. Ideally, The resulting data should be approximately identical in structure, datatypes, and column names regardless of the function it is using to read or write data.
+
+read_xlsx_flex <- function(path, sheet = NULL, range = NULL, col_names = TRUE) {
+  if(nzchar(find.package("readxl"))) use_which <- "readxl"
+  else if (nzchar(find.package("openxlsx"))) use_which <- "openxlsx"
+  else if (nzchar(find.package("xlsx"))) use_which <- "xlsx"
+  else return("please install one of: readxl, openxlsx, xlsx")
+  #
+  sheet_index <- switch (typeof(sheet),
+    "NULL" = 1,
+    "double" = sheet,
+    "integer" = sheet,
+    "numeric" = sheet,
+    "character" = NULL
+  )
+  sheet_name <- switch (typeof(sheet),
+    "NULL" = NULL,
+    "double" = NULL,
+    "integer" = NULL,
+    "numeric" = NULL,
+    "character" = sheet
+  )
+  # use_which <- "readxl"
+  switch (use_which,
+    "readxl" = readxl::read_xlsx(path = path, sheet = sheet, range = range, col_names = col_names),
+    "openxlsx" = openxlsx::read.xlsx(xlsxFile = path, sheet = ifelse(!is_null(sheet_index), sheet_index, 1) , colNames = col_names, check.names = FALSE, sep.names = " "),
+    "xlsx" = xlsx::read.xlsx(file = path, sheetIndex = sheet_index, sheetName = sheet_name, header = col_names, as.data.frame=TRUE, check.names = FALSE)
+  )
+}
+
+
+write_xlsx_flex <- function(x, path = tempfile(fileext = ".xlsx")) {
+  if(nzchar(find.package("writexl"))) use_which <- "writexl"
+  else if (nzchar(find.package("openxlsx"))) use_which <- "openxlsx"
+  else if (nzchar(find.package("xlsx"))) use_which <- "xlsx"
+  else return("please install one of: writexl, openxlsx, xlsx")
+  # use_which <- "xlsx"
+  switch (use_which,
+    "writexl" = writexl::write_xlsx(x = x, path = path, col_names = TRUE),
+    "openxlsx" = openxlsx::write.xlsx(x = x, file = path, asTable = TRUE, overwrite = TRUE),
+    "xlsx" = xlsx::write.xlsx2(x = as.data.frame(x), file = path, row.names = FALSE, showNA = FALSE) # puts the rownames in column A. removing them throws bugs.
+  )
+}
+
+```
+
+```{r scraping, eval=FALSE}
+
+## quick using google to get the address from any text query. Works best if the query is a mostly complete address.
+## TODO let query be a list of strings. Internally reduce to unique queries and then re expand to same lenth as query for return.
+google_get_address <- function(query) {
+  query <- query |> str_replace_all("[:space:]","+")
+  b <- ChromoteSession$new()
+  b$Page$navigate(paste0("https://www.google.com/search?q=",query,"+va&sclient=gws-wiz-serp"))
+  b$Page$loadEventFired()
+  x <- b$DOM$getDocument() %>% { b$DOM$querySelector(.$root$nodeId, ".LrzXr") } %>% { b$DOM$getOuterHTML(.$nodeId) } |> unlist() |> str_trim() |> str_remove_all("(<.*>(?=[^$]))|((?<=[^^])<.*>)")
+  b$close()
+  return(x)
+}
+
+google_get_addresses <- function(query) {
+  query <- query |> str_replace_all("[:space:]","+")
+  uniquery <- query |> str_unique()
+  tmp_join <- function(...) full_join(..., by = join_by(query, result))
+  b <- ChromoteSession$new()
+  results <- foreach(i=1:length(uniquery), .combine = tmp_join, .multicombine = FALSE) %do% {
+    b$Page$navigate(paste0("https://www.google.com/search?q=",uniquery[i],"+va&sclient=gws-wiz-serp"))
+    b$Page$loadEventFired()
+    x<-NA
+    try(x <- b$DOM$getDocument() %>% { b$DOM$querySelector(.$root$nodeId, ".LrzXr") } %>% { b$DOM$getOuterHTML(.$nodeId) } |> unlist() |> str_trim() |> str_remove_all("(<.*>(?=[^$]))|((?<=[^^])<.*>)"), silent = TRUE)
+    tibble_row(query=uniquery[i],result=x)
+  } |>
+    right_join(query |> as_tibble_col(column_name = "query"), by = join_by(query)) |>
+    pull(result)
+  b$close()
+  return(results)
+}
+
+# c("greenstreet gardens braddock road alexandria VA","giant e glebe Alexandria VA","the white house washington DC", "gateway arch St louis MO") |>
+# google_get_addresses()
+
+```
+
+
+
+## Basic steps
+
+1. import both files
+2. filter for relevant products (not tags)
+2.5. summarize combining multiple tracking numbers onto a single line by order number.
+3. full join using document ID == order number == sales document
+4. filter by relevant states
+5. export each state separately (as new file or appended to existing log)
+6. send emails with attachments.
+
+## Import data
+
+```{r getinput, echo=TRUE, error=TRUE, message=FALSE, warning=TRUE}
+
+ship_week <- "07"
+ship_year <- "2024"
+
+orders_path <- file.path(paste0(ship_year,"w",ship_week),paste0("uninvoiced_",ship_year,"w",ship_week,".xlsx"))
+tracking_path <- file.path(paste0(ship_year,"w",ship_week),paste0("tracking_",ship_year,"w",ship_week,".xlsx"))
+
+states_path <- file.path("statestable.xlsx")
+contact_path <- file.path("contact_info_greenstreet_growers.xlsx")
+treatment_path <- file.path("treatment_log_2024.xlsx")
+
+
+```
+
+```{r datasetup, echo=TRUE, error=TRUE, message=FALSE, warning=TRUE}
+
+orders_df <- orders_path %>% read_xlsx_flex() %>%
+  select(!any_of(c("Delivery", "Confirmation"))&!matches(".*((in?voice)|(\\s(Inv)\\s)).*", ignore.case=TRUE)|contains("quantity")) |>
+  mutate("Material Name" = `Material Description` %>% str_remove("[:punct:]?[:space:]*[:alpha:]+[:space:]+[:alnum:]+$") |> str_squish(),
+         "Material Size" = `Material Description` %>% str_extract("[:alpha:]+[:space:]+[:alnum:]+$") |> str_squish(),
+         .before = contains("quantity")) |>
+  select(-"Material Description")
+
+tracking_df <- tracking_path %>% read_xlsx_flex() %>%
+  left_join(tracking_path %>% read_xlsx_flex() %>% dplyr::select("Ship-To...","Drop Point Location") %>% dplyr::filter(!is.na(`Drop Point Location`)) %>% dplyr::rename("Receiving Location" = "Drop Point Location") %>% distinct()) %>%
+  dplyr::filter(str_equal(`Product Type`,"PROD", ignore_case = TRUE)) %>%
+  dplyr::summarise("Tracking No."=`Tracking No.` %>% dplyr::first(order_by=str_order(`Tracking No.`)), .by= !any_of("Tracking No.")) %>%
+  select(!any_of(c("...10","CFIA Number","Split","Status","Product Type","Ship-To...","Carrier","Supplier"))) %>%
+  distinct() %>%
+  mutate("Receiving City" = `Receiving Location` %>% str_squish() %>% str_remove("[:punct:]?[:space:][:alpha:]{2}$"),
+         "Receiving State" = `Receiving Location` %>% str_squish() %>% str_remove(".*[:space:](?=[:alpha:]{2}$)"),
+         "Receiving ZIP" = google_get_addresses(paste(`Customer Name`,Comments,`Receiving City`,`Receiving State`)) |> str_squish() |> str_extract("[:digit:]{5}(-[:digit:]{4})?$")) %>%
+  select(-`Receiving Location`, -`Drop Point Location`, -`Drop Point Name`) |>
+  distinct(`Supplier Description`,`Customer Name`, `Ship Week`, `Document No.`, .keep_all = TRUE) ## This is a work around for when there are lines for a single order shipping by multiple carriers. Improvment might make a more informed decision about which line to choose. This just picks the first one listed.  
+
+
+states_df <- states_path %>% read_xlsx_flex()
+
+contact_df <- contact_path %>% read_xlsx_flex()
+
+treatment_df <- treatment_path |> read_xlsx_flex()
+
+```
+
+## Join data, filter for ship week, & filter by state
+
+
+```{r joining}
+
+
+## TODO stop if there are no prio notifications to send.
+
+## an alignment function for similar names
+pairwiseAlightmentMatch = function(x,y) {Biostrings::pairwiseAlignment(x,y,scoreOnly = TRUE) > 0}
+
+## alignment on the nearest date not in the future (x is ship date, y is treatment date)
+nearestPastOrPresent = function(x,y) {sapply(x,function(a) {max(y[y<=a]) |> as_date() |> interval(a) |> is_weakly_less_than(30*24*3600)}) }
+
+## now to join everything
+joined_df_a <- dplyr::full_join(tracking_df, orders_df, by=join_by("Document No."=="Sales Document")) |>
+  filter(`Ship Week` == paste(ship_week,ship_year,sep="/"),
+         `Receiving State` %in% states_df$abriv)
+
+if(nrow(joined_df_a) <= 0) "empty table. no prior notifications required." |> stop()
+# stopifnot(nrow(joined_df_a) > 0)
+
+joined_df_b <- joined_df_a |>
+  fuzzyjoin::fuzzy_full_join(contact_df, by=c("Supplier Description"="Sender company"), match_fun = pairwiseAlightmentMatch) |> # alternatively: stringdist_full_join(contact_df, by=c("Supplier Description"="Sender company"))
+  # full_join(contact_df, by=join_by("Supplier Description"=="Sender company")) |>
+  select(-`Supplier Description`, -`Customer Name`, -`Comments`) |>
+  dplyr::rename("Receiver name"="Ship To Name", 
+                "Ship Method" = "Carrier Description",
+                "Material Quantity" = "Univoiced Quantity") |>
+  relocate(contains("sender"), contains("receiv"), "Document No.", contains("ship"), "Tracking No.", contains("date"), contains("material")) |>
+  fuzzyjoin::fuzzy_full_join(treatment_df, by=c("Ship Date" = "Treatment Date"), match_fun=nearestPastOrPresent)
+
+
+```
+
+
+## export by state
+
+```{r export}
+
+if(nrow(joined_df_b) <= 0) "empty table. no prior notifications required." |> stop()
+
+sapply(joined_df_b$`Receiving State` |> unique(), function(a) {
+  joined_df_b |>
+    filter(`Receiving State` == a) |>
+    write_xlsx_flex(file.path(paste0(ship_year,"w",ship_week),paste0(a,"_prior_notifications_greenstreet_growers_",ship_year,"w",ship_week,".xlsx")))
+})
+
+
+# write_xlsx_flex()
+```
