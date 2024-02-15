@@ -15,7 +15,7 @@ output:
 #req_pkgs <- c("devtools", "rlang", "pkgbuild", "rmarkdown", "librarian", "BiocManager", "magrittr", "tidyselect", "tidyverse", "lubridate", "stats", "readr", "measurements", "knitr", "tidyr", "foreach", "forcats", "doParallel", "parallel", "fs", "purrr", "janitor", "readxl", "writexl", "fuzzyjoin", "Biostrings") # , "openxlsx", "xlsx", "gt", "plyr","bibtex","ggpubr","ggplot2", "ggpmisc", "firatheme", "stringdist", "pwr", "effectsize", "zipcodeR", "chromote", "rvest"
 #
 cran_pacs <- c("rlang", "pkgbuild","rmarkdown", "BiocManager", "tidyselect", "tidyverse", "magrittr", "stats", "measurements", "knitr", "foreach", "doParallel", "parallel", "fs", "janitor", "readxl", "writexl","fuzzyjoin", "plyr", "stringdist") 
-dev_pacs <- c("aperium/rutil") 
+dev_pacs <- c() # "aperium/rutil" 
 bioc_pacs <- c("Biostrings")
 py_pacs <- c()
 
@@ -70,8 +70,10 @@ n_cores <- parallel::detectCores()
 # registerDoParallel(cores=n_cores-1)
 # stopImplicitCluster()
 
-## ChatGPT API key: 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
+
 ```
+
+
 
 ```{r xlxs_function}
 # These are some sloppy workarounds for reading and writing data from and to excel files. Some of the readxl and writexl are preferred but they are not universally supported. If they are not installed, these functions use on of the other two packages for xlsx-file handling in the order of preference (openxlsx is preferred over xlsx). For simplicity and robustness many features of the packages are not accessible except where they can be translated 1-to-1 across all three. Ideally, The resulting data should be approximately identical in structure, datatypes, and column names regardless of the function it is using to read or write data.
