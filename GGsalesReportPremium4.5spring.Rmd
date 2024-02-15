@@ -1,0 +1,344 @@
+---
+title: Premium Annusals 4.5in sales report spring 22-23
+author: Daniel R. Williams ^[Director of Quality Control, Greenstreet Growers, Lothian,
+  MD] ^[PhD Candidate, Dept. of Ag. & Crop Science, Ohio State University, Columbus,  Ohio]
+date: 15 Feburary 2024
+output:
+  html_notebook: default
+---
+
+
+
+```{r setup}
+# this block loads required packages and some custom functions. 
+
+#req_pkgs <- c("devtools", "rlang", "pkgbuild", "rmarkdown", "librarian", "BiocManager", "magrittr", "tidyselect", "tidyverse", "lubridate", "stats", "readr", "measurements", "knitr", "tidyr", "foreach", "forcats", "doParallel", "parallel", "fs", "purrr", "janitor", "readxl", "writexl", "fuzzyjoin", "Biostrings") # , "openxlsx", "xlsx", "gt", "plyr","bibtex","ggpubr","ggplot2", "ggpmisc", "firatheme", "stringdist", "pwr", "effectsize", "zipcodeR", "chromote", "rvest"
+#
+cran_pacs <- c("rlang", "pkgbuild","rmarkdown", "BiocManager", "tidyselect", "tidyverse", "magrittr", "stats", "measurements", "knitr", "foreach", "doParallel", "parallel", "fs", "janitor", "readxl", "writexl","fuzzyjoin", "plyr", "stringdist") 
+dev_pacs <- c("aperium/rutil") 
+bioc_pacs <- c("Biostrings")
+py_pacs <- c()
+
+## function to quietly find list of packages
+find_package_quiet <- function(pkgs) unlist(find.package(pkgs, quiet = TRUE))
+install_as_needed <- function(pacs, inst_fun = install.packages, check_fun = find_package_quiet) {
+  inst_fun(setdiff(pacs,names(unlist(sapply(pacs,check_fun)))))
+}
+
+# install cran packs
+if (length(cran_pacs) > 0) install_as_needed(cran_pacs,install.packages)
+
+# install github dev packs
+if (length(dev_pacs)>0) {
+  if (!require("pak", quietly = TRUE)) install.packages("pak")
+  install_as_needed(dev_pacs,pak::pak)
+}
+
+# install bioc packs
+if (length(bioc_pacs)>0) {
+  if (!require("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+  # install_as_needed(c("DBI","xfun"))
+  bio_instal_quiet <- function(...) BiocManager::install(..., update = FALSE, ask=FALSE)
+  BiocManager::install(version = "3.18", update = FALSE, ask=FALSE)
+  install_as_needed(bioc_pacs,bio_instal_quiet)
+}
+
+
+librarian::shelf(cran_pacs, bioc_pacs, dev_pacs, quiet = TRUE)
+installed_req_pkgs <- pak::pkg_status(c(cran_pacs, bioc_pacs, dev_pacs))$package
+loaded_pacs <- search() |> str_extract("(?<=:).*$") |> na.omit()
+
+
+# install python packs
+if ("reticulate" %in% loaded_pacs) {
+  if (!reticulate::py_available(initialize = TRUE)) install_python() 
+  if (py_available(initialize = TRUE) & (length(py_pacs)>0)) {
+    # py_exe()
+    # py_list_packages()$package
+    py_install(py_pacs)
+    # py_list_packages_names <- function(...) py_list_packages(...)$package
+    # install_as_needed(py_pacs, py_install, py_list_packages_names)
+  }
+}
+
+if((("readxl" %in% installed_req_pkgs)&is_empty(find_package_quiet("readxl")))|(("writexl" %in% installed_req_pkgs)&is_empty(find_package_quiet("writexl")))) librarian::shelf("ycphs/openxlsx") #load openxlsx if read-/write-xl not avail
+if(((("readxl" %in% installed_req_pkgs)&is_empty(find_package_quiet("readxl")))|(("writexl" %in% installed_req_pkgs)&is_empty(find_package_quiet("writexl"))))&(is_empty(find_package_quiet("openxlsx")))) librarian::shelf("colearendt/xlsx") # load xlsx if openxlsx not avail
+
+## detecting and setting the cores to use
+n_cores <- parallel::detectCores()
+## register cores for foreach
+# registerDoParallel(cores=n_cores-1)
+# stopImplicitCluster()
+
+## ChatGPT API key: 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
+```
+
+```{r xlxs_function}
+# These are some sloppy workarounds for reading and writing data from and to excel files. Some of the readxl and writexl are preferred but they are not universally supported. If they are not installed, these functions use on of the other two packages for xlsx-file handling in the order of preference (openxlsx is preferred over xlsx). For simplicity and robustness many features of the packages are not accessible except where they can be translated 1-to-1 across all three. Ideally, The resulting data should be approximately identical in structure, datatypes, and column names regardless of the function it is using to read or write data.
+
+read_xlsx_flex <- function(path, sheet = NULL, range = NULL, col_names = TRUE) {
+  if(nzchar(find.package("readxl"))) use_which <- "readxl"
+  else if (nzchar(find.package("openxlsx"))) use_which <- "openxlsx"
+  else if (nzchar(find.package("xlsx"))) use_which <- "xlsx"
+  else return("please install one of: readxl, openxlsx, xlsx")
+  #
+  sheet_index <- switch (typeof(sheet),
+    "NULL" = 1,
+    "double" = sheet,
+    "integer" = sheet,
+    "numeric" = sheet,
+    "character" = NULL
+  )
+  sheet_name <- switch (typeof(sheet),
+    "NULL" = NULL,
+    "double" = NULL,
+    "integer" = NULL,
+    "numeric" = NULL,
+    "character" = sheet
+  )
+  # use_which <- "readxl"
+  switch (use_which,
+    "readxl" = readxl::read_xlsx(path = path, sheet = sheet, range = range, col_names = col_names),
+    "openxlsx" = openxlsx::read.xlsx(xlsxFile = path, sheet = ifelse(!is_null(sheet_index), sheet_index, 1) , colNames = col_names, check.names = FALSE, sep.names = " "),
+    "xlsx" = xlsx::read.xlsx(file = path, sheetIndex = sheet_index, sheetName = sheet_name, header = col_names, as.data.frame=TRUE, check.names = FALSE)
+  )
+}
+
+
+write_xlsx_flex <- function(x, path = tempfile(fileext = ".xlsx")) {
+  if(nzchar(find.package("writexl"))) use_which <- "writexl"
+  else if (nzchar(find.package("openxlsx"))) use_which <- "openxlsx"
+  else if (nzchar(find.package("xlsx"))) use_which <- "xlsx"
+  else return("please install one of: writexl, openxlsx, xlsx")
+  # use_which <- "xlsx"
+  switch (use_which,
+    "writexl" = writexl::write_xlsx(x = x, path = path, col_names = TRUE),
+    "openxlsx" = openxlsx::write.xlsx(x = x, file = path, asTable = TRUE, overwrite = TRUE),
+    "xlsx" = xlsx::write.xlsx2(x = as.data.frame(x), file = path, row.names = FALSE, showNA = FALSE) # puts the rownames in column A. removing them throws bugs.
+  )
+}
+
+```
+
+```{r scraping, eval=FALSE}
+
+## quick using google to get the address from any text query. Works best if the query is a mostly complete address.
+## TODO let query be a list of strings. Internally reduce to unique queries and then re expand to same lenth as query for return.
+google_get_address <- function(query) {
+  query <- query |> str_replace_all("[:space:]","*")
+  b <- ChromoteSession$new()
+  b$Page$navigate(paste0("https://www.google.com/search?q=",query,"*va&sclient=gws-wiz-serp"))
+  b$Page$loadEventFired()
+  x <- b$DOM$getDocument() %>% { b$DOM$querySelector(.$root$nodeId, ".LrzXr") } %>% { b$DOM$getOuterHTML(.$nodeId) } |> unlist() |> str_trim() |> str_remove_all("(<.*>(?=[^$]))|((?<=[^^])<.*>)")
+  b$close()
+  return(x)
+}
+
+google_get_addresses <- function(query) {
+  query <- query |> str_replace_all("[:space:]","*")
+  uniquery <- query |> str_unique()
+  tmp_join <- function(...) full_join(..., by = join_by(query, result))
+  b <- ChromoteSession$new()
+  results <- foreach(i=1:length(uniquery), .combine = tmp_join, .multicombine = FALSE) %do% {
+    b$Page$navigate(paste0("https://www.google.com/search?q=",uniquery[i],"*va&sclient=gws-wiz-serp"))
+    b$Page$loadEventFired()
+    x<-NA
+    try(x <- b$DOM$getDocument() %>% { b$DOM$querySelector(.$root$nodeId, ".LrzXr") } %>% { b$DOM$getOuterHTML(.$nodeId) } |> unlist() |> str_trim() |> str_remove_all("(<.*>(?=[^$]))|((?<=[^^])<.*>)"), silent = TRUE)
+    tibble_row(query=uniquery[i],result=x)
+  } |>
+    right_join(query |> as_tibble_col(column_name = "query"), by = join_by(query)) |>
+    pull(result)
+  b$close()
+  return(results)
+}
+
+# c("greenstreet gardens braddock road alexandria VA","giant e glebe Alexandria VA","the white house washington DC", "gateway arch St louis MO") |>
+# google_get_addresses()
+
+```
+
+
+```{r utilfuns}
+
+check_empty = function(x) (is.na(x)|str_equal(x,"")|str_equal(x,"N/A", ignore_case = TRUE)|str_equal(x,"NA", ignore_case = TRUE)|(x==0)|is_na(x)|is_chr_na(x)|is_null(x))
+
+column_not_empty = function(x) not(all(check_empty(x)))
+
+remove_empties = function(x) x %>% dplyr::select(where(column_not_empty)) %>% janitor::remove_empty()
+
+
+```
+
+
+
+```{r sourcefiles}
+
+prediction_year <- year(now())*1
+
+## define paths
+CP_path <- "../../CP export"
+Ball_path <- "../../Ball export"
+CH_path <- "../../CommerceHub export"
+
+# CounterPoint Files
+tkt_hist_ln_file <- CP_path %>% dir_ls(regexp = "PS_TKT_HIST_LIN_[[:digit:]]{4}.*\\.(c|C)(s|S)(v|V)")
+tkt_hist_file <- file.path(CP_path, "PS_TKT_HIST.csv")
+item_data_file <- file.path(CP_path, "IM_ITEM.csv")
+
+# Ball Webtrack Files
+ball_file <- Ball_path %>% file.path("order_download_2023100408085501.csv")
+
+```
+
+
+
+
+```{r CP-ticket-history-import}
+
+## get table column names and table human-readable names
+
+tkt_hist_ln_names <- file.path(CP_path, "PS_TKT_HIST_LIN-names.txt") %>% 
+  readr::read_csv(col_names = c("list")) %>%
+  mutate(key = list %>% str_squish() %>% str_extract("(?<=\\()[:graph:]*(?=\\)$)") %>% str_trim(),
+         value = list %>% str_squish() %>% str_extract(".*(?=\\([:graph:]*$)") %>% str_trim()) %>%
+  select(-list) %>%
+  unique() %>%
+  na.omit()
+
+item_data_names <- file.path(CP_path, "IM_ITEM-names.txt") %>% 
+  readr::read_csv(col_names = c("list")) %>%
+  mutate(key = list %>% str_squish() %>% str_extract("(?<=\\()[:graph:]*(?=\\)$)") %>% str_trim(),
+         value = list %>% str_squish() %>% str_extract(".*(?=\\([:graph:]*$)") %>% str_trim()) %>%
+  select(-list) %>%
+  unique() %>%
+  na.omit()
+
+tkt_hist_names <- file.path(CP_path, "PS_TKT_HIST-names.txt") %>% 
+  readr::read_csv(col_names = c("list")) %>%
+  mutate(key = list %>% str_squish() %>% str_extract("(?<=\\()[:graph:]*(?=\\)$)") %>% str_trim(),
+         value = list %>% str_squish() %>% str_extract(".*(?=\\([:graph:]*$)") %>% str_trim()) %>%
+  select(-list) %>%
+  unique() %>%
+  na.omit()
+
+
+## get item data
+y <- item_data_names$value
+names(y) <- item_data_names$key
+item_data <- item_data_file %>% 
+  readr::read_csv(guess_max = 100000, num_threads = n_cores-1) %>% 
+  plyr::rename(.,replace=y) %>%
+  dplyr::select(`Item number`,`Size`,`Short Description`,"Description","Long Desc", "Addl Desc3", "Brand or Trade Mark","Retail Ready Item","Department","Sub Departments","Primary vendor")# %>%
+  # remove_empties()
+
+
+## get ticket history line data
+x <- tkt_hist_ln_names$value
+names(x) <- tkt_hist_ln_names$key
+registerDoParallel(cores=n_cores-1)
+tkt_hist_ln_data <- 
+  # foreach::foreach(i=1:length(tkt_hist_ln_file), .combine = full_join) %dopar% read_csv(tkt_hist_ln_file[i]) %>% 
+  foreach::foreach(i=1:length(tkt_hist_ln_file), .combine = rbind, .packages=c("tidyverse","doParallel")) %dopar% 
+    (read_csv(tkt_hist_ln_file[i], col_names = TRUE, guess_max = 10000, num_threads = n_cores-1, col_select=(c("Business date", "Item number", "Quantity", "Store", "Document ID", "Document") %>% match(.,tkt_hist_ln_names$value) %>% foreach(i=.) %dopar% tkt_hist_ln_names$key[i] %>% unlist()))) %>%
+  plyr::rename(.,replace=x)
+stopImplicitCluster()
+
+
+##get ticket history data
+z <- tkt_hist_names$value
+names(z) <- tkt_hist_names$key
+tkt_hist_data <- tkt_hist_file %>%
+  readr::read_csv(guess_max = 100000) %>% 
+  plyr::rename(.,replace=z) %>%
+  dplyr::select("Document ID", "Document", "Business date", "Store", "Customer #")
+
+
+#join ticket history data and ticket history line data
+tkt_hist_ln_data %<>%
+  left_join(tkt_hist_data %>% select("Document", "Customer #"), by=c("Document"))
+
+
+#join item data and ticket history line data
+tkt_hist_ln_data %<>%  
+  # remove_empties() %>%
+  left_join(item_data, by=c("Item number"))
+
+#mutate some variables
+tkt_hist_ln_data %<>%
+  dplyr::mutate(Size = as.factor(Size),
+         datasource = "CounterPoint",
+         brand = "Greenstreet Growers",
+         `Business date` = `Business date` %>% as_date()) # %>% parse_date_time("mdyIMSOp"))
+
+
+# rm(item_data)
+# 
+# CP_summary <- tkt_hist_ln_data %>%
+#   dplyr::summarise(Quantity = sum(Quantity), .by = c("Business date", "Item number", "Quantity", "Store", "Size", "Short Description","Description","Long Desc", "Addl Desc3", "Brand or Trade Mark","Retail Ready Item","Department","Sub Departments","Primary vendor","Document", "Customer #") %>% unique())
+
+#rm(tkt_hist_ln_data)
+#gc()
+```
+
+
+```{r CP_filter}
+
+#
+CP_summary <- tkt_hist_ln_data %>%
+  mutate(year = year(`Business date`),
+         month = month(`Business date`),
+         week = isoweek(`Business date`),
+         grow_season = month %>% case_match(c(2:7) ~ 1, c(1,8:12) ~ 2)) %>%
+  dplyr::summarise(Quantity = sum(Quantity), .by = !c(Quantity, month, `Business date`))
+
+
+# CP_summary %>% 
+#   filter(grow_season == 1, year >= 2019) %>% 
+#   dplyr::summarise(Quantity = sum(Quantity), .by= c(`Item number`, Size, Description, `Brand or Trade Mark`, `Sub Departments`,year)) %>%
+#   pivot_wider(names_from = year, values_from = Quantity) %>%
+#   arrange(Description, Size,desc(`2023`))
+
+CP_filtersummary <- CP_summary %>% 
+  filter(grow_season ==1,
+         year >= 2019,
+         `Sub Departments` %in% c("VEGE","HERB"),
+         !(str_detect(Size,"G")),
+         !(str_detect(Size,"Q")),
+         !(is.na(Description)|is.na(`Long Desc`)|(is.na(Size)&is.na(`Sub Departments`))),
+         !is.na(`Item number`),
+         !is.na(year),
+         !is.na(week)) |> 
+  dplyr::summarize(across(any_of(c("Quantity")), sum), .by= c(`Item number`, Size, Description, `Long Desc`, `Sub Departments`, year, week)) |>
+  mutate(CP_uid = str_c(`Item number`,year, week) |> sapply(hash))
+
+# rm(CP_summary)
+```
+
+
+
+```{r CP_export}
+
+CP_data %>%
+  # filter(year >= 2019) %>%
+  dplyr::arrange(year) %>%
+  dplyr::mutate(Quantity = if_else(is.na(Quantity)&(year==prediction_year), modelmean.fit, Quantity)) %>%
+  dplyr::select(year, `Item number`, Quantity, Size, week) %>%
+  tidyr::pivot_wider(names_from = year, values_from = Quantity) %>%
+  dplyr::left_join(item_data %>% select(`Item number`, Description), by=join_by(`Item number`)) %>%
+  dplyr::select(`Item number`, Description, Size, !c("Item number", Description, Size)) %>%
+  dplyr::rename("2024 Prediction" = `2024`) %>%
+  dplyr::mutate("2024 predicted % increase" = (`2024 Prediction`-`2023`)/`2023`) %>%
+  dplyr::arrange(desc(`2024 Prediction`)) %>%
+  as.data.frame() %>%
+  # xlsx::write.xlsx2(file = "4.5in-ball-2024analysis-v1.xlsx", sheetName = "CP_4.5in",row.names = FALSE, append = TRUE)
+  write_xlsx_flex("herbveg2024-sales-pred-v1.xlsx")
+
+
+```
+
+
+
+
+
+
+
