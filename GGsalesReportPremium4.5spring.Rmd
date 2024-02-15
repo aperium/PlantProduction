@@ -273,12 +273,14 @@ CP_filtersummary <- CP_summary %>%
          !is.na(year),
          !is.na(week)) |> 
   dplyr::summarize(across(any_of(c("Quantity")), sum), .by= c(`Item number`, Size, Description, `Long Desc`, `Sub Departments`, year)) |>
-  mutate(category = case_when(Description |> str_detect(coll("strobilanthes")) ~ "strobilanthes",
-                              Description |> str_detect(coll("(secretia)|(pallida)")) ~ "secretia",
-                              Description |> str_detect(coll("duranta")) ~ "duranta",
-                              Description |> str_detect(coll("lysmachia")) ~ "lysmachia",
-                              Description |> str_detect(coll("vinca")&coll("vine")) ~ "vinca vine",
-                              Description |> str_detect(coll("dracena")&(coll("spike")|coll("indivisa"))) ~ "dracena spike"))
+  mutate(category = case_when(Description |> str_to_lower() |> str_detect("(ipomea)|(potato[:space:]vine)") ~ "ipomea",
+                              Description |> str_to_lower() |> str_detect("(strobilanthes)|(persian[:space:]shield)") ~ "strobilanthes",
+                              Description |> str_to_lower() |> str_detect("(secretia)|(pallida)") ~ "secretia",
+                              Description |> str_to_lower() |> str_detect("duranta") ~ "duranta",
+                              Description |> str_to_lower() |> str_detect("lysmachia") ~ "lysmachia",
+                              Description |> str_to_lower() |> str_detect("vinca([:punct:]|[:space:])((vine)|(major))") ~ "vinca vine",
+                              Description |> str_to_lower() |> str_detect("wojo'?s?[:space:]?jem") ~ "vinca vine",
+                              Description |> str_to_lower() |> str_detect("dracena[:space:]((spike)|(indivisa))") ~ "dracena spike"))
 
 # rm(CP_summary)
 ```
