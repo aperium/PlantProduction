@@ -61,10 +61,6 @@ if (py_available(initialize = TRUE) & (length(py_pacs)>0)) {
 
 
 
-
-
-
-
 if((("readxl" %in% installed_req_pkgs)&is_empty(find_package_quiet("readxl")))|(("writexl" %in% installed_req_pkgs)&is_empty(find_package_quiet("writexl")))) librarian::shelf("ycphs/openxlsx") #load openxlsx if read-/write-xl not avail
 if(((("readxl" %in% installed_req_pkgs)&is_empty(find_package_quiet("readxl")))|(("writexl" %in% installed_req_pkgs)&is_empty(find_package_quiet("writexl"))))&(is_empty(find_package_quiet("openxlsx")))) librarian::shelf("colearendt/xlsx") # load xlsx if openxlsx not avail
 
@@ -268,5 +264,6 @@ sapply(joined_df_b$`Receiving State` |> unique(), function(a) {
 })
 
 
-# write_xlsx_flex()
 ```
+
+## would be great if it could now put the emails together and send them
