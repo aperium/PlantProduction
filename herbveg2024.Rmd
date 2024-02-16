@@ -207,8 +207,8 @@ out_path <- "/Greenstreet Growers/TeamSite - Documents/Shared/Production Greenst
 
 ## get table column names and table human-readable names
 
-tkt_hist_ln_names <- file.path(CP_path, "PS_TKT_HIST_LIN-names.txt") %>% 
-  readr::read_csv(col_names = c("list")) %>%
+tkt_hist_ln_names <- fs::path(CP_path, "PS_TKT_HIST_LIN-names.txt") |> 
+  readr::read_csv(col_names = c("list")) |>
   mutate(key = list %>% str_squish() %>% str_extract("(?<=\\()[:graph:]*(?=\\)$)") %>% str_trim(),
          value = list %>% str_squish() %>% str_extract(".*(?=\\([:graph:]*$)") %>% str_trim()) %>%
   select(-list) %>%
