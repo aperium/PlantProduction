@@ -1,0 +1,945 @@
+---
+title: Combining orders from Ball and Express for Spring 2024
+author: Daniel R. Williams ^[Director of Quality Control, Greenstreet Growers, Lothian,
+  MD] ^[PhD Candidate, Dept. of Ag. & Crop Science, Ohio State University, Columbus,  Ohio]
+date: 06 Feburary 2024
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+# Abstract
+
+
+```{r setup}
+# this block loads required packages and some custom functions. 
+
+#req_pkgs <- c("devtools", "rlang", "pkgbuild", "rmarkdown", "librarian", "BiocManager", "magrittr", "tidyselect", "tidyverse", "lubridate", "stats", "readr", "measurements", "knitr", "tidyr", "foreach", "forcats", "doParallel", "parallel", "fs", "purrr", "janitor", "readxl", "writexl", "fuzzyjoin", "Biostrings") # , "openxlsx", "xlsx", "gt", "plyr","bibtex","ggpubr","ggplot2", "ggpmisc", "firatheme", "stringdist", "pwr", "effectsize", "zipcodeR", "chromote", "rvest"
+#
+cran_pacs <- c("rlang", "pkgbuild","rmarkdown", "BiocManager", "tidyselect", "tidyverse", "magrittr", "stats", "measurements", "knitr", "foreach", "doParallel", "parallel", "fs", "janitor", "readxl", "writexl","fuzzyjoin", "plyr", "stringdist") 
+dev_pacs <- c("aperium/rutil") 
+bioc_pacs <- c("Biostrings")
+py_pacs <- c()
+
+## function to quietly find list of packages
+find_package_quiet <- function(pkgs) unlist(find.package(pkgs, quiet = TRUE))
+install_as_needed <- function(pacs, inst_fun = install.packages, check_fun = find_package_quiet) {
+  inst_fun(setdiff(pacs,names(unlist(sapply(pacs,check_fun)))))
+}
+
+# install cran packs
+if (length(cran_pacs) > 0) install_as_needed(cran_pacs,install.packages)
+
+# install github dev packs
+if (length(dev_pacs)>0) {
+  if (!require("pak", quietly = TRUE)) install.packages("pak")
+  install_as_needed(dev_pacs,pak::pak)
+}
+
+# install bioc packs
+if (length(bioc_pacs)>0) {
+  if (!require("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+  # install_as_needed(c("DBI","xfun"))
+  bio_instal_quiet <- function(...) BiocManager::install(..., update = FALSE, ask=FALSE)
+  BiocManager::install(version = "3.18", update = FALSE, ask=FALSE)
+  install_as_needed(bioc_pacs,bio_instal_quiet)
+}
+
+
+librarian::shelf(cran_pacs, bioc_pacs, dev_pacs, quiet = TRUE)
+installed_req_pkgs <- pak::pkg_status(c(cran_pacs, bioc_pacs, dev_pacs))$package
+loaded_pacs <- search() |> str_extract("(?<=:).*$") |> na.omit()
+
+
+# install python packs
+if ("reticulate" %in% loaded_pacs) {
+  if (!reticulate::py_available(initialize = TRUE)) install_python() 
+  if (py_available(initialize = TRUE) & (length(py_pacs)>0)) {
+    # py_exe()
+    # py_list_packages()$package
+    py_install(py_pacs)
+    # py_list_packages_names <- function(...) py_list_packages(...)$package
+    # install_as_needed(py_pacs, py_install, py_list_packages_names)
+  }
+}
+
+if((("readxl" %in% installed_req_pkgs)&is_empty(find_package_quiet("readxl")))|(("writexl" %in% installed_req_pkgs)&is_empty(find_package_quiet("writexl")))) librarian::shelf("ycphs/openxlsx") #load openxlsx if read-/write-xl not avail
+if(((("readxl" %in% installed_req_pkgs)&is_empty(find_package_quiet("readxl")))|(("writexl" %in% installed_req_pkgs)&is_empty(find_package_quiet("writexl"))))&(is_empty(find_package_quiet("openxlsx")))) librarian::shelf("colearendt/xlsx") # load xlsx if openxlsx not avail
+
+## detecting and setting the cores to use
+n_cores <- parallel::detectCores()
+## register cores for foreach
+# registerDoParallel(cores=n_cores-1)
+# stopImplicitCluster()
+
+
+```
+
+```{r xlxs_function}
+# These are some sloppy workarounds for reading and writing data from and to excel files. Some of the readxl and writexl are preferred but they are not universally supported. If they are not installed, these functions use on of the other two packages for xlsx-file handling in the order of preference (openxlsx is preferred over xlsx). For simplicity and robustness many features of the packages are not accessible except where they can be translated 1-to-1 across all three. Ideally, The resulting data should be approximately identical in structure, datatypes, and column names regardless of the function it is using to read or write data.
+
+read_xlsx_flex <- function(path, sheet = NULL, range = NULL, col_names = TRUE) {
+  if(nzchar(find.package("readxl"))) use_which <- "readxl"
+  else if (nzchar(find.package("openxlsx"))) use_which <- "openxlsx"
+  else if (nzchar(find.package("xlsx"))) use_which <- "xlsx"
+  else return("please install one of: readxl, openxlsx, xlsx")
+  #
+  sheet_index <- switch (typeof(sheet),
+    "NULL" = 1,
+    "double" = sheet,
+    "integer" = sheet,
+    "numeric" = sheet,
+    "character" = NULL
+  )
+  sheet_name <- switch (typeof(sheet),
+    "NULL" = NULL,
+    "double" = NULL,
+    "integer" = NULL,
+    "numeric" = NULL,
+    "character" = sheet
+  )
+  # use_which <- "readxl"
+  switch (use_which,
+    "readxl" = readxl::read_xlsx(path = path, sheet = sheet, range = range, col_names = col_names),
+    "openxlsx" = openxlsx::read.xlsx(xlsxFile = path, sheet = ifelse(!is_null(sheet_index), sheet_index, 1) , colNames = col_names, check.names = FALSE, sep.names = " "),
+    "xlsx" = xlsx::read.xlsx(file = path, sheetIndex = sheet_index, sheetName = sheet_name, header = col_names, as.data.frame=TRUE, check.names = FALSE)
+  )
+}
+
+
+write_xlsx_flex <- function(x, path = tempfile(fileext = ".xlsx")) {
+  if(nzchar(find.package("writexl"))) use_which <- "writexl"
+  else if (nzchar(find.package("openxlsx"))) use_which <- "openxlsx"
+  else if (nzchar(find.package("xlsx"))) use_which <- "xlsx"
+  else return("please install one of: writexl, openxlsx, xlsx")
+  # use_which <- "xlsx"
+  switch (use_which,
+    "writexl" = writexl::write_xlsx(x = x, path = path, col_names = TRUE),
+    "openxlsx" = openxlsx::write.xlsx(x = x, file = path, asTable = TRUE, overwrite = TRUE),
+    "xlsx" = xlsx::write.xlsx2(x = as.data.frame(x), file = path, row.names = FALSE, showNA = FALSE) # puts the rownames in column A. removing them throws bugs.
+  )
+}
+
+```
+
+```{r scraping, eval=FALSE}
+
+## quick using google to get the address from any text query. Works best if the query is a mostly complete address.
+## TODO let query be a list of strings. Internally reduce to unique queries and then re expand to same lenth as query for return.
+google_get_address <- function(query) {
+  query <- query |> str_replace_all("[:space:]","*")
+  b <- ChromoteSession$new()
+  b$Page$navigate(paste0("https://www.google.com/search?q=",query,"*va&sclient=gws-wiz-serp"))
+  b$Page$loadEventFired()
+  x <- b$DOM$getDocument() %>% { b$DOM$querySelector(.$root$nodeId, ".LrzXr") } %>% { b$DOM$getOuterHTML(.$nodeId) } |> unlist() |> str_trim() |> str_remove_all("(<.*>(?=[^$]))|((?<=[^^])<.*>)")
+  b$close()
+  return(x)
+}
+
+google_get_addresses <- function(query) {
+  query <- query |> str_replace_all("[:space:]","*")
+  uniquery <- query |> str_unique()
+  tmp_join <- function(...) full_join(..., by = join_by(query, result))
+  b <- ChromoteSession$new()
+  results <- foreach(i=1:length(uniquery), .combine = tmp_join, .multicombine = FALSE) %do% {
+    b$Page$navigate(paste0("https://www.google.com/search?q=",uniquery[i],"*va&sclient=gws-wiz-serp"))
+    b$Page$loadEventFired()
+    x<-NA
+    try(x <- b$DOM$getDocument() %>% { b$DOM$querySelector(.$root$nodeId, ".LrzXr") } %>% { b$DOM$getOuterHTML(.$nodeId) } |> unlist() |> str_trim() |> str_remove_all("(<.*>(?=[^$]))|((?<=[^^])<.*>)"), silent = TRUE)
+    tibble_row(query=uniquery[i],result=x)
+  } |>
+    right_join(query |> as_tibble_col(column_name = "query"), by = join_by(query)) |>
+    pull(result)
+  b$close()
+  return(results)
+}
+
+# c("greenstreet gardens braddock road alexandria VA","giant e glebe Alexandria VA","the white house washington DC", "gateway arch St louis MO") |>
+# google_get_addresses()
+
+```
+
+
+```{r utilfuns}
+
+check_empty = function(x) (is.na(x)|str_equal(x,"")|str_equal(x,"N/A", ignore_case = TRUE)|str_equal(x,"NA", ignore_case = TRUE)|(x==0)|is_na(x)|is_chr_na(x)|is_null(x))
+
+column_not_empty = function(x) not(all(check_empty(x)))
+
+remove_empties = function(x) x %>% dplyr::select(where(column_not_empty)) %>% janitor::remove_empty()
+
+
+```
+
+
+
+```{r sourcefiles}
+
+prediction_year <- year(now())*1
+
+## define paths
+CP_path <- "../../CP export"
+Ball_path <- "../../Ball export"
+CH_path <- "../../CommerceHub export"
+
+# CounterPoint Files
+tkt_hist_ln_file <- CP_path %>% dir_ls(regexp = "PS_TKT_HIST_LIN_[[:digit:]]{4}.*\\.(c|C)(s|S)(v|V)")
+tkt_hist_file <- file.path(CP_path, "PS_TKT_HIST.csv")
+item_data_file <- file.path(CP_path, "IM_ITEM.csv")
+
+# Ball Webtrack Files
+ball_file <- Ball_path %>% file.path("order_download_2023100408085501.csv")
+
+```
+
+
+
+
+```{r CP-ticket-history-import}
+
+## get table column names and table human-readable names
+
+tkt_hist_ln_names <- file.path(CP_path, "PS_TKT_HIST_LIN-names.txt") %>% 
+  readr::read_csv(col_names = c("list")) %>%
+  mutate(key = list %>% str_squish() %>% str_extract("(?<=\\()[:graph:]*(?=\\)$)") %>% str_trim(),
+         value = list %>% str_squish() %>% str_extract(".*(?=\\([:graph:]*$)") %>% str_trim()) %>%
+  select(-list) %>%
+  unique() %>%
+  na.omit()
+
+item_data_names <- file.path(CP_path, "IM_ITEM-names.txt") %>% 
+  readr::read_csv(col_names = c("list")) %>%
+  mutate(key = list %>% str_squish() %>% str_extract("(?<=\\()[:graph:]*(?=\\)$)") %>% str_trim(),
+         value = list %>% str_squish() %>% str_extract(".*(?=\\([:graph:]*$)") %>% str_trim()) %>%
+  select(-list) %>%
+  unique() %>%
+  na.omit()
+
+tkt_hist_names <- file.path(CP_path, "PS_TKT_HIST-names.txt") %>% 
+  readr::read_csv(col_names = c("list")) %>%
+  mutate(key = list %>% str_squish() %>% str_extract("(?<=\\()[:graph:]*(?=\\)$)") %>% str_trim(),
+         value = list %>% str_squish() %>% str_extract(".*(?=\\([:graph:]*$)") %>% str_trim()) %>%
+  select(-list) %>%
+  unique() %>%
+  na.omit()
+
+
+## get item data
+y <- item_data_names$value
+names(y) <- item_data_names$key
+item_data <- item_data_file %>% 
+  readr::read_csv(guess_max = 100000, num_threads = n_cores-1) %>% 
+  plyr::rename(.,replace=y) %>%
+  dplyr::select(`Item number`,`Size`,`Short Description`,"Description","Long Desc", "Addl Desc3", "Brand or Trade Mark","Retail Ready Item","Department","Sub Departments","Primary vendor")# %>%
+  # remove_empties()
+
+
+## get ticket history line data
+x <- tkt_hist_ln_names$value
+names(x) <- tkt_hist_ln_names$key
+registerDoParallel(cores=n_cores-1)
+tkt_hist_ln_data <- 
+  # foreach::foreach(i=1:length(tkt_hist_ln_file), .combine = full_join) %dopar% read_csv(tkt_hist_ln_file[i]) %>% 
+  foreach::foreach(i=1:length(tkt_hist_ln_file), .combine = rbind, .packages=c("tidyverse","doParallel")) %dopar% 
+    (read_csv(tkt_hist_ln_file[i], col_names = TRUE, guess_max = 10000, num_threads = n_cores-1, col_select=(c("Business date", "Item number", "Quantity", "Store", "Document ID", "Document") %>% match(.,tkt_hist_ln_names$value) %>% foreach(i=.) %dopar% tkt_hist_ln_names$key[i] %>% unlist()))) %>%
+  plyr::rename(.,replace=x)
+stopImplicitCluster()
+
+
+##get ticket history data
+z <- tkt_hist_names$value
+names(z) <- tkt_hist_names$key
+tkt_hist_data <- tkt_hist_file %>%
+  readr::read_csv(guess_max = 100000) %>% 
+  plyr::rename(.,replace=z) %>%
+  dplyr::select("Document ID", "Document", "Business date", "Store", "Customer #")
+
+
+#join ticket history data and ticket history line data
+tkt_hist_ln_data %<>%
+  left_join(tkt_hist_data %>% select("Document", "Customer #"), by=c("Document"))
+
+
+#join item data and ticket history line data
+tkt_hist_ln_data %<>%  
+  # remove_empties() %>%
+  left_join(item_data, by=c("Item number"))
+
+#mutate some variables
+tkt_hist_ln_data %<>%
+  dplyr::mutate(Size = as.factor(Size),
+         datasource = "CounterPoint",
+         brand = "Greenstreet Growers",
+         `Business date` = `Business date` %>% as_date()) # %>% parse_date_time("mdyIMSOp"))
+
+
+# rm(item_data)
+# 
+# CP_summary <- tkt_hist_ln_data %>%
+#   dplyr::summarise(Quantity = sum(Quantity), .by = c("Business date", "Item number", "Quantity", "Store", "Size", "Short Description","Description","Long Desc", "Addl Desc3", "Brand or Trade Mark","Retail Ready Item","Department","Sub Departments","Primary vendor","Document", "Customer #") %>% unique())
+
+#rm(tkt_hist_ln_data)
+#gc()
+```
+
+
+```{r CP_filter}
+
+#
+CP_summary <- tkt_hist_ln_data %>%
+  mutate(year = year(`Business date`),
+         month = month(`Business date`),
+         week = isoweek(`Business date`),
+         grow_season = month %>% case_match(c(2:7) ~ 1, c(1,8:12) ~ 2)) %>%
+  dplyr::summarise(Quantity = sum(Quantity), .by = !c(Quantity, month, `Business date`))
+
+
+# CP_summary %>% 
+#   filter(grow_season == 1, year >= 2019) %>% 
+#   dplyr::summarise(Quantity = sum(Quantity), .by= c(`Item number`, Size, Description, `Brand or Trade Mark`, `Sub Departments`,year)) %>%
+#   pivot_wider(names_from = year, values_from = Quantity) %>%
+#   arrange(Description, Size,desc(`2023`))
+
+CP_filtersummary <- CP_summary %>% 
+  filter(grow_season ==1,
+         year >= 2019,
+         `Sub Departments` %in% c("VEGE","HERB"),
+         !(str_detect(Size,"G")),
+         !(str_detect(Size,"Q")),
+         !(is.na(Description)|is.na(`Long Desc`)|(is.na(Size)&is.na(`Sub Departments`))),
+         !is.na(`Item number`),
+         !is.na(year),
+         !is.na(week)) |> 
+  dplyr::summarize(across(any_of(c("Quantity")), sum), .by= c(`Item number`, Size, Description, `Long Desc`, `Sub Departments`, year, week)) |>
+  mutate(CP_uid = str_c(`Item number`,year, week) |> sapply(hash))
+
+# rm(CP_summary)
+```
+
+
+
+```{r CP_calc-tops}
+
+
+CP_sumtable <- CP_filtersummary
+
+
+totalsline <- CP_sumtable %>% ungroup() %>%
+  group_by(`Item number`) %>%
+  # dplyr::summarise(Quantity = sum(Quantity))
+  dplyr::summarise(QuantityWeight = sum(Quantity/(prediction_year-year)^2))
+
+
+# top10 <- totalsline %>% arrange(desc(Quantity)) %>% filter(percent_rank(Quantity)>(1-12/length(Quantity)))
+# top20 <- totalsline %>% arrange(desc(Quantity)) %>% filter(percent_rank(Quantity)>(1-21/length(Quantity)))
+# top50 <- totalsline %>% arrange(desc(Quantity)) %>% filter(percent_rank(Quantity)>(1-50/length(Quantity)))
+# top100 <- totalsline %>% arrange(desc(Quantity)) %>% filter(percent_rank(Quantity)>(1-100/length(Quantity)))
+# top250 <- totalsline %>% arrange(desc(Quantity)) %>% filter(percent_rank(Quantity)>(1-250/length(Quantity)))
+# top1000 <- totalsline %>% arrange(desc(Quantity)) %>% filter(percent_rank(Quantity)>(1-1000/length(Quantity)))
+
+
+
+CP_top10 <- totalsline %>% arrange(desc(QuantityWeight)) %>% filter(percent_rank(QuantityWeight)>(1-12/length(QuantityWeight))) %>% select(-QuantityWeight)
+CP_top20 <- totalsline %>% arrange(desc(QuantityWeight)) %>% filter(percent_rank(QuantityWeight)>(1-21/length(QuantityWeight))) %>% select(-QuantityWeight)
+CP_top50 <- totalsline %>% arrange(desc(QuantityWeight)) %>% filter(percent_rank(QuantityWeight)>(1-50/length(QuantityWeight))) %>% select(-QuantityWeight)
+CP_top100 <- totalsline %>% arrange(desc(QuantityWeight)) %>% filter(percent_rank(QuantityWeight)>(1-100/length(QuantityWeight))) %>% select(-QuantityWeight)
+CP_top250 <- totalsline %>% arrange(desc(QuantityWeight)) %>% filter(percent_rank(QuantityWeight)>(1-250/length(QuantityWeight))) %>% select(-QuantityWeight)
+CP_top500 <- totalsline %>% arrange(desc(QuantityWeight)) %>% filter(percent_rank(QuantityWeight)>(1-500/length(QuantityWeight))) %>% select(-QuantityWeight)
+CP_top1000 <- totalsline %>% arrange(desc(QuantityWeight)) %>% filter(percent_rank(QuantityWeight)>(1-1000/length(QuantityWeight))) %>% select(-QuantityWeight)
+CP_top3000 <- totalsline %>% arrange(desc(QuantityWeight)) %>% filter(percent_rank(QuantityWeight)>(1-3000/length(QuantityWeight))) %>% select(-QuantityWeight)
+CP_top10000 <- totalsline %>% arrange(desc(QuantityWeight)) %>% filter(percent_rank(QuantityWeight)>(1-10000/length(QuantityWeight))) %>% select(-QuantityWeight)
+
+# CP_sumtable %>% 
+#   filter(resize %in% top10$resize) %>%
+#   pivot_wider(names_from = resize, values_from = Quantity)
+# 
+
+# gc()
+```
+
+
+
+```{r CP_forcast_weeks}
+
+prediction_year <- year(now())
+
+CP_sumtable_trimmed <- CP_filtersummary |>
+  # filter(`Item number` %in% CP_top250$`Item number`) |>
+  dplyr::summarise(across(any_of(c("Quantity")), sum), .by= c(Size, `Sub Departments`, year, week)) |>
+  na.omit()
+
+# CP_prediction <- expand_grid(year = min(years):prediction_year, `Item number` = CP_sumtable_trimmed$`Item number` %>% unique(), Size = CP_sumtable_trimmed$Size %>% unique())
+
+registerDoParallel(cores=n_cores-1)
+CP_prediction <- foreach(i=min(CP_sumtable_trimmed$year):prediction_year, .combine=full_join, .packages=c("dplyr")) %dopar% {
+  CP_sumtable_trimmed |> 
+    dplyr::select(Size,`Sub Departments`) |> 
+    distinct() |> 
+    mutate(year = i)
+  } 
+CP_prediction <- foreach(i=min(CP_sumtable_trimmed$week):max(CP_sumtable_trimmed$week), .combine=full_join, .packages=c("dplyr")) %dopar% {
+  CP_prediction |>
+    mutate(week = i)
+  }
+stopImplicitCluster()
+
+
+
+# read for list of lm
+# https://stackoverflow.com/questions/41998349/how-to-create-a-list-of-linear-CP_models-in-r
+
+
+
+
+
+CP_model0a <- CP_sumtable_trimmed %>% 
+  mutate(weights = if_else(is.na(Quantity)|(Quantity<0), 0, Quantity)/max(Quantity, na.rm=TRUE)) %>%
+  lm(Quantity ~ Size*year*week*`Sub Departments`, data = ., weights = .$weights)
+
+CP_model0 <- CP_sumtable_trimmed %>% 
+  mutate(weights = 1/(4^(prediction_year-year))) %>%
+  lm(Quantity ~ Size*year*week*`Sub Departments`, data = ., weights = .$weights)
+
+CP_model1 <- CP_sumtable_trimmed %>% 
+  mutate(weights = 1/(3^(prediction_year-year))) %>%
+  lm(Quantity ~ Size*year*week*`Sub Departments`, data = ., weights = .$weights)
+
+CP_model2 <- CP_sumtable_trimmed %>% 
+  mutate(weights = 1/(2^(prediction_year-year))) %>%
+  lm(Quantity ~ Size*year*week*`Sub Departments`, data = ., weights = .$weights)
+
+CP_model2a <- CP_sumtable_trimmed %>% 
+  mutate(weights = 1/(5^(prediction_year-year))) %>%
+  lm(Quantity ~ Size*year*week*`Sub Departments`, data = ., weights = .$weights)
+
+CP_model3 <- CP_sumtable_trimmed %>% 
+  mutate(weights = 1/(2^(prediction_year-year))) %>%
+  lm(I(Quantity-0*year)~Size*week*`Sub Departments`, data = ., weights = .$weights)
+
+CP_model4 <- CP_sumtable_trimmed %>% 
+  mutate(weights = 1/(3^(prediction_year-year))) %>%
+  lm(I(Quantity-0*year)~Size*week*`Sub Departments`, data = ., weights = .$weights)
+
+CP_model5 <- CP_sumtable_trimmed %>% 
+  mutate(weights = 1/(4^(prediction_year-year))) %>%
+  lm(I(Quantity-0*year)~Size*week*`Sub Departments`, data = ., weights = .$weights)
+
+CP_model5b <- CP_sumtable_trimmed %>% 
+  mutate(weights = 1/(5^(prediction_year-year))) %>%
+  lm(I(Quantity-0*year)~Size*week*`Sub Departments`, data = ., weights = .$weights)
+
+CP_model5a <- CP_sumtable_trimmed %>% 
+  dplyr::mutate(weights = if_else(is.na(Quantity)|(Quantity<0), 0, Quantity)/max(Quantity, na.rm = TRUE)) %>%
+  lm(I(Quantity-0*year)~Size*week*`Sub Departments`, data = ., weights = .$weights)
+
+CP_prediction %<>% add_column((CP_model1 %>% predict(newdata = CP_prediction, se.fit = TRUE, interval = "prediction"))$fit %>% as_tibble() %>% rename_with( ~ paste0("CP_model1.",.x)))
+CP_prediction %<>% add_column((CP_model2 %>% predict(newdata = CP_prediction, se.fit = TRUE, interval = "prediction"))$fit %>% as_tibble() %>% rename_with( ~ paste0("CP_model2.",.x)))
+CP_prediction %<>% add_column((CP_model2a %>% predict(newdata = CP_prediction, se.fit = TRUE, interval = "prediction"))$fit %>% as_tibble() %>% rename_with( ~ paste0("CP_model2a.",.x)))
+CP_prediction %<>% add_column((CP_model3 %>% predict(newdata = CP_prediction, se.fit = TRUE, interval = "prediction"))$fit %>% as_tibble() %>% rename_with( ~ paste0("CP_model3.",.x)))
+CP_prediction %<>% add_column((CP_model4 %>% predict(newdata = CP_prediction, se.fit = TRUE, interval = "prediction"))$fit %>% as_tibble() %>% rename_with( ~ paste0("CP_model4.",.x)))
+CP_prediction %<>% add_column((CP_model0 %>% predict(newdata = CP_prediction, se.fit = TRUE, interval = "prediction"))$fit %>% as_tibble() %>% rename_with( ~ paste0("CP_model0.",.x)))
+CP_prediction %<>% add_column((CP_model5 %>% predict(newdata = CP_prediction, se.fit = TRUE, interval = "prediction"))$fit %>% as_tibble() %>% rename_with( ~ paste0("CP_model5.",.x)))
+CP_prediction %<>% add_column((CP_model0a %>% predict(newdata = CP_prediction, se.fit = TRUE, interval = "prediction"))$fit %>% as_tibble() %>% rename_with( ~ paste0("CP_model0a.",.x)))
+CP_prediction %<>% add_column((CP_model5a %>% predict(newdata = CP_prediction, se.fit = TRUE, interval = "prediction"))$fit %>% as_tibble() %>% rename_with( ~ paste0("CP_model5a.",.x)))
+CP_prediction %<>% add_column((CP_model5b %>% predict(newdata = CP_prediction, se.fit = TRUE, interval = "prediction"))$fit %>% as_tibble() %>% rename_with( ~ paste0("CP_model5b.",.x)))
+
+
+
+CP_prediction %<>% mutate(modelmean.fit = (CP_model1.fit*CP_model2.fit*CP_model2a.fit*CP_model3.fit*CP_model4.fit*CP_model5.fit*CP_model0.fit*CP_model5a.fit*CP_model5b.fit*CP_model0a.fit)/10 %>% round_any(1),
+                          modelmean.fit = if_else(modelmean.fit < 0, NA, modelmean.fit),
+                          modelmean.fit = modelmean.fit %>% pmax.int(0))
+
+# CP_prediction%<>% cbind(CP_model_2 %>% predict(newdata = prediction, se.fit = TRUE, interval = "prediction"))
+
+# prediction$CP_model_qty <- CP_model_1 %>%
+#  predict.lm(newdata = prediction, se.fit = TRUE) %>%
+#  round_any(1)
+
+
+
+
+
+round_tmp <- function(x) {
+  round_any(x,1) %>% as.integer()
+}
+
+CP_prediction_weeks <- CP_prediction |>
+  select(`Sub Departments`, Size, year, week, modelmean.fit) |>
+  filter(year == prediction_year) |>
+  na.omit() |>
+  mutate(Quantity = modelmean.fit |> round_any(1)) |>
+  select( -modelmean.fit)
+
+
+# CP_data <- CP_sumtable %>% 
+#   # filter(`Item number` %in% top250$`Item number`) %>%
+#   dplyr::full_join(CP_prediction, by=c("year", "Size", "week")) %>%
+#   # mutate(across(2:31, as.double)) %>%
+#   mutate(across(5:35, round_tmp)) %>%
+#   remove_empties()
+
+```
+
+
+```{r CP_forcast_itemyear}
+
+prediction_year <- year(now())
+
+CP_sumtable_trimmed <- CP_filtersummary |>
+  # filter(`Item number` %in% CP_top250$`Item number`) |>
+  dplyr::summarise(across(any_of(c("Quantity")), sum), .by= c(year, `Item number`)) |>
+  na.omit()
+
+# CP_prediction <- expand_grid(year = min(years):prediction_year, `Item number` = CP_sumtable_trimmed$`Item number` %>% unique(), Size = CP_sumtable_trimmed$Size %>% unique())
+
+registerDoParallel(cores=n_cores-1)
+CP_prediction <- foreach(i=min(CP_sumtable_trimmed$year):prediction_year, .combine=full_join, .packages=c("dplyr")) %dopar% {
+  CP_sumtable_trimmed |> 
+    dplyr::select(`Item number`) |> 
+    distinct() |> 
+    mutate(year = i)}
+stopImplicitCluster()
+
+
+
+# read for list of lm
+# https://stackoverflow.com/questions/41998349/how-to-create-a-list-of-linear-CP_models-in-r
+
+# as.formula()
+modelsList <- c("Quantity ~ year*`Item number`",
+                "I(Quantity-0*year)~`Item number`")
+
+# expr()
+weightsList <- c(expr(if_else(is.na(Quantity)|(Quantity<0), 0, Quantity)/max(Quantity, na.rm=TRUE)),
+                 expr(1/(2^(prediction_year-year))),
+                 expr(1/(3^(prediction_year-year))),
+                 expr(1/(4^(prediction_year-year))),
+                 expr(1/(5^(prediction_year-year))),
+                 expr(1/(6^(prediction_year-year))))
+
+modelInputs <- expand_grid(myFormulas = modelsList, myWeights = weightsList)  # 
+
+## loks like this is working!!!!
+
+models <- modelInputs |>
+  rowwise() |>
+  dplyr::mutate(model = lm(formula = myFormulas |> as.formula(), data = CP_sumtable_trimmed, weights = CP_sumtable_trimmed |> mutate(weights = eval_bare(myWeights)) |> select(weights) |> unlist()) |> list(),
+                prediction = predict(object = model, newdata = CP_prediction, se.fit = TRUE, interval = "prediction") |> list(),
+                fitfit = prediction |> as_tibble() |> pluck("fit") |> as_tibble() |> select("fit") |> list())
+
+modelfits <- models$fitfit |> list_transpose() |>list_flatten() |> as_tibble()
+meanfit = modelfits |> rowMeans(na.rm = TRUE) |>
+  round_any(1) |>
+  pmax.int(0)
+
+CP_prediction_plus <- CP_prediction |> 
+  cbind(modelfits) |>
+  mutate(fitmean = meanfit)
+  
+
+### wow
+
+
+# 
+# 
+# CP_model0a <- CP_sumtable_trimmed %>% 
+#   mutate(weights = if_else(is.na(Quantity)|(Quantity<0), 0, Quantity)/max(Quantity, na.rm=TRUE)) %>%
+#   lm(Quantity ~ year*`Item number`, data = ., weights = .$weights)
+# 
+# CP_model0 <- CP_sumtable_trimmed %>% 
+#   mutate(weights = 1/(4^(prediction_year-year))) %>%
+#   lm(Quantity ~ year*`Item number`, data = ., weights = .$weights)
+# 
+# CP_model1 <- CP_sumtable_trimmed %>% 
+#   mutate(weights = 1/(3^(prediction_year-year))) %>%
+#   lm(Quantity ~ year*`Item number`, data = ., weights = .$weights)
+# 
+# CP_model2 <- CP_sumtable_trimmed %>% 
+#   mutate(weights = 1/(2^(prediction_year-year))) %>%
+#   lm(Quantity ~ year*`Item number`, data = ., weights = .$weights)
+# 
+# CP_model2a <- CP_sumtable_trimmed %>% 
+#   mutate(weights = 1/(5^(prediction_year-year))) %>%
+#   lm(Quantity ~ year*`Item number`, data = ., weights = .$weights)
+# 
+# CP_model3 <- CP_sumtable_trimmed %>% 
+#   mutate(weights = 1/(2^(prediction_year-year))) %>%
+#   lm(I(Quantity-0*year)~`Item number`, data = ., weights = .$weights)
+# 
+# CP_model4 <- CP_sumtable_trimmed %>% 
+#   mutate(weights = 1/(3^(prediction_year-year))) %>%
+#   lm(I(Quantity-0*year)~`Item number`, data = ., weights = .$weights)
+# 
+# CP_model5 <- CP_sumtable_trimmed %>% 
+#   mutate(weights = 1/(4^(prediction_year-year))) %>%
+#   lm(I(Quantity-0*year)~`Item number`, data = ., weights = .$weights)
+# 
+# CP_model5b <- CP_sumtable_trimmed %>% 
+#   mutate(weights = 1/(5^(prediction_year-year))) %>%
+#   lm(I(Quantity-0*year)~`Item number`, data = ., weights = .$weights)
+# 
+# CP_model5a <- CP_sumtable_trimmed %>% 
+#   dplyr::mutate(weights = if_else(is.na(Quantity)|(Quantity<0), 0, Quantity)/max(Quantity, na.rm = TRUE)) %>%
+#   lm(I(Quantity-0*year)~`Item number`, data = ., weights = .$weights)
+# 
+# CP_prediction %<>% add_column((CP_model1 %>% predict(newdata = CP_prediction, se.fit = TRUE, interval = "prediction"))$fit %>% as_tibble() %>% rename_with( ~ paste0("CP_model1.",.x)))
+# CP_prediction %<>% add_column((CP_model2 %>% predict(newdata = CP_prediction, se.fit = TRUE, interval = "prediction"))$fit %>% as_tibble() %>% rename_with( ~ paste0("CP_model2.",.x)))
+# CP_prediction %<>% add_column((CP_model2a %>% predict(newdata = CP_prediction, se.fit = TRUE, interval = "prediction"))$fit %>% as_tibble() %>% rename_with( ~ paste0("CP_model2a.",.x)))
+# CP_prediction %<>% add_column((CP_model3 %>% predict(newdata = CP_prediction, se.fit = TRUE, interval = "prediction"))$fit %>% as_tibble() %>% rename_with( ~ paste0("CP_model3.",.x)))
+# CP_prediction %<>% add_column((CP_model4 %>% predict(newdata = CP_prediction, se.fit = TRUE, interval = "prediction"))$fit %>% as_tibble() %>% rename_with( ~ paste0("CP_model4.",.x)))
+# CP_prediction %<>% add_column((CP_model0 %>% predict(newdata = CP_prediction, se.fit = TRUE, interval = "prediction"))$fit %>% as_tibble() %>% rename_with( ~ paste0("CP_model0.",.x)))
+# CP_prediction %<>% add_column((CP_model5 %>% predict(newdata = CP_prediction, se.fit = TRUE, interval = "prediction"))$fit %>% as_tibble() %>% rename_with( ~ paste0("CP_model5.",.x)))
+# CP_prediction %<>% add_column((CP_model0a %>% predict(newdata = CP_prediction, se.fit = TRUE, interval = "prediction"))$fit %>% as_tibble() %>% rename_with( ~ paste0("CP_model0a.",.x)))
+# CP_prediction %<>% add_column((CP_model5a %>% predict(newdata = CP_prediction, se.fit = TRUE, interval = "prediction"))$fit %>% as_tibble() %>% rename_with( ~ paste0("CP_model5a.",.x)))
+# CP_prediction %<>% add_column((CP_model5b %>% predict(newdata = CP_prediction, se.fit = TRUE, interval = "prediction"))$fit %>% as_tibble() %>% rename_with( ~ paste0("CP_model5b.",.x)))
+# 
+# 
+# 
+# CP_prediction %<>% mutate(modelmean.fit = (CP_model1.fit*CP_model2.fit*CP_model2a.fit*CP_model3.fit*CP_model4.fit*CP_model5.fit*CP_model0.fit*CP_model5a.fit*CP_model5b.fit*CP_model0a.fit)/10 %>% round_any(1),
+#                           modelmean.fit = if_else(modelmean.fit < 0, NA, modelmean.fit),
+#                           modelmean.fit = modelmean.fit %>% pmax.int(0))
+
+
+
+# CP_prediction%<>% cbind(CP_model_2 %>% predict(newdata = prediction, se.fit = TRUE, interval = "prediction"))
+
+# prediction$CP_model_qty <- CP_model_1 %>%
+#  predict.lm(newdata = prediction, se.fit = TRUE) %>%
+#  round_any(1)
+
+
+
+
+
+round_tmp <- function(x) {
+  round_any(x,1) %>% as.integer()
+}
+
+CP_prediction_itemyear <- CP_prediction_plus |>
+  select(`Item number`, year, fitmean) |>
+  filter(year == prediction_year) |>
+  na.omit() |>
+  mutate(Quantity = fitmean) |>
+  select( -fitmean)
+
+
+CP_data <- CP_prediction_itemyear %>%
+  dplyr::left_join(item_data, by=c("Item number")) %>%
+  remove_empties()
+
+```
+
+```{r CP_merge}
+
+CP_prediction_weeks |>
+  filter(Size == "IN4",
+         `Sub Departments` == "HERB") |>
+  mutate(quant_prop = Quantity / sum(Quantity))
+
+
+CP_data |>
+  filter(Size == "IN4",
+         `Sub Departments` == "HERB")
+
+
+
+
+
+# registerDoParallel(cores=n_cores-1)
+# CP_merged <- foreach(sd = CP_data$`Sub Departments` |> unique(), .combine=full_join, .packages=c("dplyr")) %dopar% {
+#   foreach(sz = CP_data$Size |> unique(), .combine=full_join, .packages=c("dplyr")) %dopar% {
+#     CP_data |>
+#       filter(Size == sz, `Sub Departments` == sd) |>
+#       mutate({{str_c("w",wk)}} = Quantity * )
+#   }
+# }
+# stopImplicitCluster()
+
+
+```
+
+
+
+```{r CP_export}
+
+CP_data %>%
+  # filter(year >= 2019) %>%
+  dplyr::arrange(year) %>%
+  dplyr::mutate(Quantity = if_else(is.na(Quantity)&(year==prediction_year), modelmean.fit, Quantity)) %>%
+  dplyr::select(year, `Item number`, Quantity, Size, week) %>%
+  tidyr::pivot_wider(names_from = year, values_from = Quantity) %>%
+  dplyr::left_join(item_data %>% select(`Item number`, Description), by=join_by(`Item number`)) %>%
+  dplyr::select(`Item number`, Description, Size, !c("Item number", Description, Size)) %>%
+  dplyr::rename("2024 Prediction" = `2024`) %>%
+  dplyr::mutate("2024 predicted % increase" = (`2024 Prediction`-`2023`)/`2023`) %>%
+  dplyr::arrange(desc(`2024 Prediction`)) %>%
+  as.data.frame() %>%
+  # xlsx::write.xlsx2(file = "4.5in-ball-2024analysis-v1.xlsx", sheetName = "CP_4.5in",row.names = FALSE, append = TRUE)
+  write_xlsx_flex("herbveg2024-sales-pred-v1.xlsx")
+
+
+```
+
+
+
+
+```{r CP_visualize, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE, include=TRUE, results='hide', fig.width = 25, fig.height = 60, eval=FALSE}
+# data %<>%
+#   dplyr::filter(resize %in% top50$resize) %>%
+#   dplyr::filter(grow_season == 1) 
+  # dplyr::mutate(across(starts_with("model"), function(x) if_else(x > max(filter(data,resize==.$resize)$Quantity, na.rm = TRUE), NA, x))) #do a sumarize by resize for max quant, modelmean where year == prediction year. 
+  # filter(resize == "4 in") %>%
+  
+data %>%
+  filter(`Item number` %in% top250$`Item number`) %>% 
+  ggplot(aes(y=Quantity,x=year,group=`Item number`,color=`Item number`,fill=`Item number`)) +
+    geom_point(aes(size = 2),show.legend = FALSE)+
+    geom_point(data = . %>% filter(year == prediction_year),aes(y = modelmean.fit, size = 2, fill = NA), stroke = 2, shape = 1, show.legend = FALSE) +
+    geom_label(data = . %>% filter(year == prediction_year),aes(y = modelmean.fit, label = round_any(modelmean.fit,1), fill = NULL, line = NULL), hjust = 0, nudge_x = .75, show.legend = FALSE) +
+    geom_smooth(aes(y=model1.fit,ymin=model1.lwr, ymax=model1.upr), method = "lm", linetype="13", show.legend = FALSE) +
+    geom_smooth(aes(y=model2.fit,ymin=model2.lwr, ymax=model2.upr), method = "lm", linetype="13", show.legend = FALSE) +
+    geom_smooth(aes(y=model2a.fit,ymin=model2a.lwr, ymax=model2a.upr), method = "lm", linetype="13", show.legend = FALSE) +
+    geom_smooth(aes(y=model3.fit,ymin=model3.lwr, ymax=model3.upr), method = "lm", linetype="13", show.legend = FALSE) +
+    geom_smooth(aes(y=model4.fit,ymin=model4.lwr, ymax=model4.upr), method = "lm", linetype="13", show.legend = FALSE) +
+    geom_smooth(aes(y=model5.fit,ymin=model5.lwr, ymax=model5.upr), method = "lm", linetype="13", show.legend = FALSE) +
+    geom_smooth(aes(y=model0.fit,ymin=model0.lwr, ymax=model0.upr), method = "lm", linetype="13", show.legend = FALSE) +
+    geom_smooth(aes(y=model5a.fit,ymin=model5a.lwr, ymax=model5a.upr), method = "lm", linetype="13", show.legend = FALSE) +
+    geom_smooth(aes(y=model0a.fit,ymin=model0a.lwr, ymax=model0a.upr), method = "lm", linetype="13", show.legend = FALSE) +
+    geom_smooth(aes(y=modelmean.fit), method = "lm", show.legend = FALSE) +
+    facet_wrap(vars(`Item number`), scales="free", shrink = TRUE, ncol = 8, labeller = labeller(`Item number` = function(x) item_data$Description[match(x,item_data$`Item number`)])) +
+    # scale_y_log10()+
+    scale_y_continuous(limits = c(0,NA)) +
+    scale_x_continuous(limits = c(min(years),prediction_year+3), breaks = seq.int(prediction_year,min(years),-2), minor_breaks = c(c(min(years):prediction_year)))+
+    firatheme::theme_fira()
+
+data %>%
+  filter(year >= 2019) %>%
+  arrange(year) %>%
+  dplyr::mutate(Quantity = if_else(is.na(Quantity)&(year==prediction_year), modelmean.fit %>% round_any(1), Quantity)) %>%
+  select(year, `Item number`, Quantity) %>%
+  pivot_wider(names_from = year, values_from = Quantity) %>%
+  left_join(item_data %>% select(`Item number`, Description), by=join_by(`Item number`)) %>%
+  select(`Item number`, Description, !c("Item number", Description)) %>%
+  arrange(desc(`2024`)) %>%
+  knit_print()
+
+
+
+# gc()
+```
+
+
+
+
+
+
+
+```{r import_webtrack}
+
+#filters
+#exclude Four Star -- purchased through Express already
+# supplier <- "four star sales llc" # %>% ball_data$Supplier[amatch(.,ball_data$Supplier, maxDist = Inf)]
+
+ball_data <- read_csv(ball_file, col_names = TRUE, guess_max = 10000, num_threads = n_cores-1)
+
+
+# searchterms <- c("4.5 in" = "4.5",
+#                  "annual" = "ann",
+#                  "6 in" = "5.5")
+# append_term("4.5in annual flower",searchterms[3])
+# append_term <- function(text, term) {
+#   if (str_detect(text, unlist(term))) return(names(term))
+# }
+list_keywords_generic <- function(text, terms) {
+  if (is_missing(text)) return(NULL)
+  if (is_null(text)) return(NULL)
+  if (is.na(text)) return(NULL)
+  # tags <- NULL
+  append_term1 <- function(term) {
+    if (str_detect(text, term)) return(term)
+  }
+  sapply(terms, append_term1) %>% unlist() %>% names()
+}
+# list_keywords_generic("4.5in annuals",searchterms)
+vectorized_keywords_generic <- function(text, terms) {
+  if (is_missing(text)) return(NULL) else
+  if (is_null(text)) return(NULL) else {
+    registerDoParallel(cores=n_cores-1)
+    foreach::foreach(i=text, .packages = c("rlang", "purrr","stringr")) %dopar% list_keywords_generic(i, terms)
+    stopImplicitCluster()
+  }
+}
+# vectorized_keywords_generic(c("4.5in annuals flowers","5.5in perennials"),searchterms)
+
+
+
+
+
+
+list_keywords <- function(text) {
+  if (is_missing(text)) return(NULL)
+  if (is_null(text)) return(NULL)
+  if (is.na(text)) return(NULL)
+  tags <- NULL
+  if (str_detect(text, "4.5")) {tags %<>% append("4.5 in")}
+  if (str_detect(text, "\\$\\.5")) {tags %<>% append("4.5 in")}
+  if (str_detect(text, "6[:space:]?((IN)|(\")) 3[:space:]?P{1,3}")) {tags %<>% append("6 in")}
+  if (str_detect(text, "6[:space:]?((IN)|(\"))(?![:digit:]P{1,3})")) {tags %<>% append("6 in")}
+  if (str_detect(text, "4[:space:]?((IN)|(\")).*(1[:space:]?P{1,3})?")) {tags %<>% append("4 in")}
+  if (str_detect(text, "1801")) {tags %<>% append("4 in")}
+  if (str_detect(text, "11.*((HB)|(BASKET)|(BSKT))")) {tags %<>% append("11 in hb")}
+  if (str_detect(text, "10.*((HB)|(BASKET)|(BSKT)|(BASEKTS))")) {tags %<>% append("10 in hb")}
+  if (str_detect(text, "HB 10")) {tags %<>% append("10 in hb")}
+  if (str_detect(text, "8.*((HB)|(BASKET)|(BSKT))")) {tags %<>% append("8 in hb")}
+  if (str_detect(text, "14.*COMBO")) {tags %<>% append("14 in 6ppp")}
+  # if (str_detect(text, "6.*((2PPP)|(CUSTOM))")) {tags %<>% append("14 in 6ppp")}
+  if (str_detect(text, "1.*GAL")) {tags %<>% append("1 gal")}
+  if (str_detect(text, "LINER")) {tags %<>% append("liners")}
+  if (str_detect(text, "PERENNIAL")) {tags %<>% append("perennials")}
+  if (str_detect(text, "QVC")) {tags %<>% append("qvc")}
+  if (str_detect(text, "QCV")) {tags %<>% append("qvc")}
+  if (str_detect(text, "SOIL")) {tags %<>% append("soil")}
+  if (str_detect(text, "TAG")) {tags %<>% append("tags")}
+  if (str_detect(text, "ELLE")) {tags %<>% append("ellepots")}
+  if (str_detect(text, "NATURES?[:space:]?SOURCE")) {tags %<>% append("fertilizer")}
+  if (str_detect(text, "FERTILIZER")) {tags %<>% append("fertilizer")}
+  if (str_detect(text, "804")) {tags %<>% append("804")}
+  if (str_detect(text, "2.5[:space:]?((IN)|(\"))")) {tags %<>% append("2.5 in")}
+  if (str_detect(text, "(3201)|(32(?![:space:]?(IN)|(\")))")) {tags %<>% append("2.5 in")}
+  if (str_detect(text, "CANT[EU]RBURY")) {tags %<>% append("Canturbury")}
+  if (str_detect(text, "GREENBRIER")) {tags %<>% append("Greenbrier")}
+  if (str_detect(text, "FOUR[:space:]?SEASON")) {tags %<>% append("Greenbrier")}
+  if (str_detect(text, "(RUPPERT)|(RUPP)")) {tags %<>% append("Ruppert")}
+  if (str_detect(text, "(BRIGHTVIEW)|(BRIGHT)")) {tags %<>% append("Brightview")}
+  if (str_detect(text, "LEVEL[:SPACE:]?GREEN")) {tags %<>% append("Level Green")}
+  if (str_detect(text, "HERRINGTON")) {tags %<>% append("Herrington")}
+  if (str_detect(text, "(HERB)|(VEG[GE])")) {tags %<>% append("edible")}
+  if (str_detect(text, "(PEPPER)|(TOMATO)|(KYLE)|(DANIEL)")) {tags %<>% append("edible")}
+  if (str_detect(text, "FERN")) {tags %<>% append("ferns")}
+  if (str_detect(text, "9IN")) {tags %<>% append("9 in")}
+  if (str_detect(text, "MUMS")) {tags %<>% append("mums")}
+  if (str_detect(text, "GERANIUM")) {tags %<>% append("geraniums")}
+  if (str_detect(text, "BEGONIA")) {tags %<>% append("begonias")}
+  if (str_detect(text, "(COMB)|(CONBO)")) {tags %<>% append("combo")}
+  if (str_detect(text, "(HB)|(BASKET)|(BSKT)|(BSK)")) {tags %<>% append("annual hb")}
+  if (str_detect(text, "RETAIL")) {tags %<>% append("retail")}
+  if (str_detect(text, "12[:space:]?IN[:space:]COMBO[:space:]4PPP")) {tags %<>% append("retail")}
+  if (str_detect(text, "(RPL)|(REPLACE)")) {tags %<>% append("replacement")}
+  if (str_detect(text, "(^|[:space:])((TRIAL)|(TEST))([:space:]|$)")) {tags %<>% append("trial")}
+  if (str_detect(text, "4[^(\\.5)]*((IN)|(\"))")) {tags %<>% append("4 in")}
+  if (str_detect(text, "6[^(\\.5)]*((IN)|(\"))")) {tags %<>% append("6 in")}
+  if (str_detect(text, "102T")) {tags %<>% append("liners")}
+  if (str_detect(text, "(^|[:space:])50([:space:]|$|(\'S))")) {tags %<>% append("50T liners")}
+  if (str_detect(text, "BENCH[:space:]?CARD")) {tags %<>% append("bench cards")}
+  if (str_detect(text, "HEUCHERA")) {tags %<>% append("heuchera")}
+  if (str_detect(text, "(^|[:space:])PETE([:space:]|$|(\'S))")) {tags %<>% append("Pete")}
+  if (str_detect(text, "CANNA")) {tags %<>% append("canna")}
+  if (str_detect(text, "CUPHEA")) {tags %<>% append("cuphea")}
+  if (str_detect(text, "PANS((Y)|(IES))")) {tags %<>% append("cuphea")}
+  if (str_detect(text, "CELOSIA")) {tags %<>% append("celosia")}
+  tags %>%
+    unique() %>%
+    return()
+}
+vectorized_keywords <- function(vect) {
+  if (is_missing(vect)) return(NULL) else
+  if (is_null(vect)) return(NULL) else
+  sapply(vect, list_keywords) %>% return()
+}
+
+# list_keywords <- function(text) {
+#   tags <- vector(typeof(text),length(text))
+#   if_else (str_detect(text, "4.5"), tags %<>% append("4.5 in"), NULL)
+#   tags %>%
+#     unique() %>%
+#     return()
+# }
+
+# list_kewords("4.5 in annuals qvc 6IN") %>% unlist()
+
+# vectorized_keywords(c("4.5 SOIL","QVC", "SOIL", "6IN", "6 IN 804"))
+
+
+# ball_data$`PO Number` %>% sapply(is_missing) %>% unique()
+
+# vectorized_keywords(ball_data$`PO Number`) %>% unique()
+
+vector_paste <- function(x,y) {
+  registerDoParallel(cores=n_cores-1)
+  foreach(i=1:length(x)) %dopar% paste_skip_na(x[i],y[i])
+  stopImplicitCluster()
+}
+
+# vector_paste(ball_data$`PO Number`,ball_data$`Reference Number`)
+
+ball_filtered <- ball_data %>% 
+  remove_empties() %>%
+  mutate(`Ship Date` = `Ship Date` %>% parse_date_time("Ymd"),
+         year = `Ship Date` %>% year(),
+         month = `Ship Date` %>% month(),
+         week = `Ship Date` %>% isoweek(),
+         grow_season = month %>% case_match(c(2:7) ~ 1,
+                                            c(1,8:12) ~ 2)) |>
+         # `keywords` = vector_paste(`PO Number`,`Reference Number`) %>% vectorized_keywords()) %>%
+  unite("keywords", `PO Number`,`Reference Number`, sep = " ", remove = FALSE, na.rm = TRUE) |>
+  filter(grow_season == 1,
+         !str_equal(`Material Group Description`,`Material Group Description`[amatch("hardgoods",`Material Group Description`, maxDist = str_length("hardgoods"))]))
+
+# ball_filtered %>% select(`PO Number`,`Reference Number`,keywords) %>% unique() %>% kable()
+# 
+# 
+# ball_filtered %>%
+#   dplyr::filter(sapply(keywords,is_null)) %>%
+#   dplyr::summarise(Quantity = sum(Quantity), .by=c(`PO Number`)) %>%
+#   dplyr::arrange(desc(Quantity)) %>%
+#   .$`PO Number` %>%
+#   unique()
+# ball_filtered %>%
+#   dplyr::filter(sapply(keywords,is_null)) %>%
+#   dplyr::summarise(Quantity = sum(Quantity), .by=c(`Reference Number`)) %>%
+#   dplyr::arrange(desc(Quantity)) %>%
+#   .$`Reference Number` %>%
+#   unique()
+
+##summarize
+
+ball_keywords <- ball_filtered$keywords %>% unlist() %>% tibble() %>%
+  plyr::rename(c(`.` = "keyword")) %>%
+  dplyr::summarise(frequency = n(), .by=keyword) %>%
+  plyr::arrange(desc(frequency))
+
+ball_filtersummary <- ball_filtered %>% 
+  # dplyr::summarize(Quantity= sum(Quantity), Variety = bestmatch(Variety, PW_filtersummary$Description) ,.by= c(`PO Number`, `Ball Material Number`, year))
+  dplyr::summarize(Quantity= sum(Quantity) ,.by= c(keywords, `Ball Material Number`, year, week)) |>
+  mutate(Ball_uid = sapply(paste(`Ball Material Number`, keywords, year, week), hash))
+
+# ball_filtersummary %>% kable()
+
+
+# ball_filtersummary <- ball_filtered %>% 
+  # dplyr::summarize(Quantity= sum(Quantity), Variety = tibble(var = Variety, mindist= foreach(i=1:length(var)) %dopar% {min(afind(PW_filtersummary$Description, var)$distance[,i])} %>% unlist()) %>% filter(mindist == min(.$mindist)) %>% .$var ,.by= c(Supplier, `PO Number`, `Ball Material Number`, `Material Group Description`, year, grow_season))
+
+
+# tibble(Variety = c("PetVEG Suprtn Royal Velvet#", "PetVEG Suprtn Royal Velvet Ipd"), mindist= foreach(i=1:2) %dopar% {min(afind(PW_filtersummary$Description, c("PetVEG Suprtn Royal Velvet#", "PetVEG Suprtn Royal Velvet Ipd"))$distance[,i])} %>% unlist()) %>% filter(mindist == min(.$mindist)) %>% .$Variety
+
+
+# bestmatch(c("PetVEG Suprtn Royal Velvet#", "PetVEG Suprtn Royal Velvet Ipd"), PW_filtersummary$Description)
+
+
+# rm(ball_data)
+```
+
+
+
+
+```{r matching}
+
+threshold <- 1/2^.25
+CP_alighning <- CP_filtersummary %>%
+  mutate(Ball_uid = ball_filtersummary$Ball_uid[amatch(Description, ball_filtersummary$keywords, maxDist = 8/16*(str_length(Description)*str_length(ball_filtersummary$keywords))^(.5))]) 
+merging <- full_join(CP_alighning, ball_filtersummary, by=join_by("Ball_uid","year"), suffix = c(".GG",".FS")) %>%
+  select(any_of(year, `Item number`, Size, Description, Variety, `PO Number`,`Material Group Description`, `Ball Material Number`, Supplier, Quantity.GG, Quantity.FS, PW_uid, Ball_uid))
+
+
+```
+
