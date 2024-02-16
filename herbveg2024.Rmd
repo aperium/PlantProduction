@@ -78,7 +78,7 @@ n_cores <- parallel::detectCores()
 ```{r xlxs_function}
 # These are some sloppy workarounds for reading and writing data from and to excel files. Some of the readxl and writexl are preferred but they are not universally supported. If they are not installed, these functions use on of the other two packages for xlsx-file handling in the order of preference (openxlsx is preferred over xlsx). For simplicity and robustness many features of the packages are not accessible except where they can be translated 1-to-1 across all three. Ideally, The resulting data should be approximately identical in structure, datatypes, and column names regardless of the function it is using to read or write data.
 
-read_xlsx_flex <- function(path, sheet = NULL, range = NULL, col_names = TRUE) {
+read_xlsx_flex <- function(path, sheet = NULL, range = NULL, col_names = TRUE, guess_max = Inf) {
   if(nzchar(find.package("readxl"))) use_which <- "readxl"
   else if (nzchar(find.package("openxlsx"))) use_which <- "openxlsx"
   else if (nzchar(find.package("xlsx"))) use_which <- "xlsx"
@@ -180,6 +180,7 @@ prediction_year <- year(now())*1
 ## define paths
 CP_path <- "/Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstreet/Production Planning QC/Plant Sales and Orders/CP export" |> fs::path_home()
 Ball_path <- "/Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstreet/Production Planning QC/Plant Sales and Orders/Ball export" |> fs::path_home()
+Express_path <- "/Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstreet/Production Planning QC/Plant Sales and Orders/Express Seed export" |> fs::path_home()
 CH_path <- "/Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstreet/Production Planning QC/Plant Sales and Orders/CommerceHub export" |> fs::path_home()
 
 # CounterPoint Files
@@ -190,9 +191,13 @@ item_data_file <- fs::path(CP_path, "IM_ITEM.csv")
 # Ball Webtrack Files
 ball_file <- Ball_path %>% fs::path("order_download_20240214105644.xlsx")
 
+# Express Files
+e_orders <- Express_path |> fs::path("express_open_orders_20240214.xlsx")
+e_delivered <- Express_path |> fs::path("express_shipped_orders_20240214.xlsx")
+  # read_xlsx_flex(guess_max = Inf)
 
 # output path
-out_path <- "/Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstreet/Production Planning QC/Plant Sales and Orders/2024/herbveg 2024" |> path_home()
+out_path <- "/Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstreet/Production Planning QC/Plant Sales and Orders/2024/herbveg 2024" |> fs::path_home()
 
 ```
 
