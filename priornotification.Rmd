@@ -169,15 +169,17 @@ google_get_addresses <- function(query) {
 
 ```{r getinput, echo=TRUE, error=TRUE, message=FALSE, warning=TRUE}
 
-ship_week <- "07"
+ship_week <- "08"
 ship_year <- "2024"
 
-orders_path <- file.path(paste0(ship_year,"w",ship_week),paste0("uninvoiced_",ship_year,"w",ship_week,".xlsx"))
-tracking_path <- file.path(paste0(ship_year,"w",ship_week),paste0("tracking_",ship_year,"w",ship_week,".xlsx"))
+dir_path <- "Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstreet/Production Planning QC/Compliance/Ball Liners 2024" |> path_home()
 
-states_path <- file.path("statestable.xlsx")
-contact_path <- file.path("contact_info_greenstreet_growers.xlsx")
-treatment_path <- file.path("treatment_log_2024.xlsx")
+orders_path <- dir_path |> path(paste0(ship_year,"w",ship_week),paste0("uninvoiced_",ship_year,"w",ship_week,".xlsx"))
+tracking_path <- dir_path |> path(paste0(ship_year,"w",ship_week),paste0("tracking_",ship_year,"w",ship_week,".xlsx"))
+
+states_path <- dir_path |> path("statestable.xlsx")
+contact_path <- dir_path |> path("contact_info_greenstreet_growers.xlsx")
+treatment_path <- dir_path |> path("treatment_log_2024.xlsx")
 
 
 ```
@@ -199,7 +201,7 @@ tracking_df <- tracking_path %>% read_xlsx_flex() %>%
   distinct() %>%
   mutate("Receiving City" = `Receiving Location` %>% str_squish() %>% str_remove("[:punct:]?[:space:][:alpha:]{2}$"),
          "Receiving State" = `Receiving Location` %>% str_squish() %>% str_remove(".*[:space:](?=[:alpha:]{2}$)"),
-         "Receiving ZIP" = google_get_addresses(paste(`Customer Name`,Comments,`Receiving City`,`Receiving State`)) |> str_squish() |> str_extract("[:digit:]{5}(-[:digit:]{4})?$")) %>%
+         "Receiving ZIP" = rutil::google_get_address(paste(`Customer Name`,Comments,`Receiving City`,`Receiving State`)) |> str_squish() |> str_extract("[:digit:]{5}(-[:digit:]{4})?$")) %>%
   select(-`Receiving Location`, -`Drop Point Location`, -`Drop Point Name`) |>
   distinct(`Supplier Description`,`Customer Name`, `Ship Week`, `Document No.`, .keep_all = TRUE) ## This is a work around for when there are lines for a single order shipping by multiple carriers. Improvment might make a more informed decision about which line to choose. This just picks the first one listed.  
 
