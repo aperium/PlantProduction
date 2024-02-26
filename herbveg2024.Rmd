@@ -17,7 +17,7 @@ output:
 #req_pkgs <- c("devtools", "rlang", "pkgbuild", "rmarkdown", "librarian", "BiocManager", "magrittr", "tidyselect", "tidyverse", "lubridate", "stats", "readr", "measurements", "knitr", "tidyr", "foreach", "forcats", "doParallel", "parallel", "fs", "purrr", "janitor", "readxl", "writexl", "fuzzyjoin", "Biostrings") # , "openxlsx", "xlsx", "gt", "plyr","bibtex","ggpubr","ggplot2", "ggpmisc", "firatheme", "stringdist", "pwr", "effectsize", "zipcodeR", "chromote", "rvest"
 #
 cran_pacs <- c("rlang", "pkgbuild","rmarkdown", "BiocManager", "tidyselect", "tidyverse", "magrittr", "stats", "measurements", "knitr", "foreach", "doParallel", "parallel", "fs", "janitor", "readxl", "writexl","fuzzyjoin", "plyr", "stringdist") 
-dev_pacs <- c("aperium/rutil") 
+dev_pacs <- c() ## "aperium/rutil" 
 bioc_pacs <- c("Biostrings")
 py_pacs <- c()
 
@@ -475,8 +475,9 @@ CP_prediction_weeks <- CP_prediction |>
   select(`Sub Departments`, Size, year, week, modelmean.fit) |>
   filter(year == prediction_year) |>
   na.omit() |>
-  mutate(Quantity = modelmean.fit |> round_any(1)) |>
-  select( -modelmean.fit)
+  mutate(Quantity = modelmean.fit |> round_any(1),
+         week_prop = Quantity / sum(Quantity)) |>
+  select( -modelmean.fit, -Quantity)
 
 
 # CP_data <- CP_sumtable %>% 
@@ -639,15 +640,11 @@ CP_data <- CP_prediction_itemyear %>%
 
 ```{r CP_merge}
 
-CP_prediction_weeks |>
-  filter(Size == "IN4",
-         `Sub Departments` == "HERB") |>
-  mutate(quant_prop = Quantity / sum(Quantity))
-
 
 CP_data |>
-  filter(Size == "IN4",
-         `Sub Departments` == "HERB")
+  full_join(CP_prediction_weeks) |>
+  mutate(Quantity = Quantity * quant_prop)
+
 
 
 
