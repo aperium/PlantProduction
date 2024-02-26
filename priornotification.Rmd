@@ -21,9 +21,9 @@ bioc_pacs <- c("Biostrings")
 py_pacs <- c("camelot-py")
 
 ## function to quietly find list of packages
-find_package_quiet <- function(pkgs) unlist(find.package(pkgs, quiet = TRUE))
-install_as_needed <- function(pacs, inst_fun = install.packages, check_fun = find_package_quiet) {
-  inst_fun(setdiff(pacs,names(unlist(sapply(pacs,check_fun)))))
+find_package_quiet <- function(pkgs, ...) unlist(find.package(pkgs, quiet = TRUE, ...))
+install_as_needed <- function(pacs, inst_fun = install.packages, check_fun = find_package_quiet, ...) {
+  inst_fun(setdiff(pacs,names(unlist(sapply(pacs,\(x) check_fun(x,...))))))
 }
 
 # install cran packs
