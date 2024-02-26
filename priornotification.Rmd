@@ -119,10 +119,10 @@ write_xlsx_flex <- function(x, path = tempfile(fileext = ".xlsx")) {
 
 ```
 
-```{r scraping, eval=TRUE}
+```{r scraping, eval=FALSE}
 
 ## quick using google to get the address from any text query. Works best if the query is a mostly complete address.
-## TODO let query be a list of strings. Internally reduce to unique queries and then re expand to same lenth as query for return.
+## let query be a list of strings. Internally reduce to unique queries and then re expand to same lenth as query for return.
 google_get_address <- function(query) {
   query <- query |> str_replace_all("[:space:]","+")
   b <- ChromoteSession$new()
@@ -201,7 +201,7 @@ tracking_df <- tracking_path %>% read_xlsx_flex() %>%
   distinct() %>%
   mutate("Receiving City" = `Receiving Location` %>% str_squish() %>% str_remove("[:punct:]?[:space:][:alpha:]{2}$"),
          "Receiving State" = `Receiving Location` %>% str_squish() %>% str_remove(".*[:space:](?=[:alpha:]{2}$)"),
-         "Receiving ZIP" = google_get_addresses(paste(`Customer Name`,Comments,`Receiving City`,`Receiving State`)) |> str_squish() |> str_extract("[:digit:]{5}(-[:digit:]{4})?$")) %>%
+         "Receiving ZIP" = rutil::google_get_address(paste(`Customer Name`,Comments,`Receiving City`,`Receiving State`)) |> str_squish() |> str_extract("[:digit:]{5}(-[:digit:]{4})?$")) %>%
   select(-`Receiving Location`, -`Drop Point Location`, -`Drop Point Name`) |>
   distinct(`Supplier Description`,`Customer Name`, `Ship Week`, `Document No.`, .keep_all = TRUE) ## This is a work around for when there are lines for a single order shipping by multiple carriers. Improvement might make a more informed decision about which line to choose. This just picks the first one listed.  
 
