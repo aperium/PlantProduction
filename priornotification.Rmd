@@ -243,7 +243,8 @@ states_df <- states_path %>% read_xlsx_flex()
 
 contact_df <- contact_path %>% read_xlsx_flex()
 
-treatment_df <- treatment_path |> read_xlsx_flex()
+treatment_df <- treatment_path |> read_xlsx_flex() |>
+  select(!c("Target", "Location", "EPA Registration Number", "Treatment Dilution", "Applicator", "Restricted Reentry Duration", "Restricted Reentry Expiration", "Active Ingredient Initial Concentration", "Treatment Application"))
 
 ```
 
@@ -253,13 +254,23 @@ treatment_df <- treatment_path |> read_xlsx_flex()
 ```{r joining}
 
 
-## TODO stop if there are no prio notifications to send.
+## TODO stop if there are no prior notifications to send.
 
 ## an alignment function for similar names
 pairwiseAlightmentMatch = function(x,y) {Biostrings::pairwiseAlignment(x,y,scoreOnly = TRUE) > 0}
 
 ## alignment on the nearest date not in the future (x is ship date, y is treatment date)
-nearestPastOrPresent = function(x,y) {sapply(x,function(a) {max(y[y<=a]) |> as_date() |> interval(a) |> is_weakly_less_than(30*24*3600)}) }
+nearestPastOrPresent = function(x,y) {sapply(x,\(a) {max(y[y<=a]) |> as_date() |> interval(a) |> is_weakly_less_than(30*24*3600)}) }
+
+npop = function(x,y) {
+  ## TODO
+}
+
+# m <- c("1/13/24", "2/16/24") |> parse_date_time(orders = "mdy")
+# n <- c("1/16/24", "2/17/24") |> parse_date_time(orders = "mdy")
+# nearestPastOrPresent(m,n)
+# 
+# n[n<=m[2]] |> max() |> as_date() |> interval(m[2]) |> is_weakly_less_than(30*24*3600)
 
 ## now to join everything
 joined_df_a <- dplyr::full_join(tracking_df, orders_df, by=join_by("Document No."=="Sales Document")) |>
@@ -277,7 +288,7 @@ joined_df_b <- joined_df_a |>
                 "Ship Method" = "Carrier Description",
                 "Material Quantity" = "Univoiced Quantity") |>
   relocate(contains("sender"), contains("receiv"), "Document No.", contains("ship"), "Tracking No.", contains("date"), contains("material")) |>
-  fuzzyjoin::fuzzy_full_join(treatment_df, by=c("Ship Date" = "Treatment Date"), match_fun=nearestPastOrPresent)
+  fuzzyjoin::fuzzy_left_join(treatment_df, by=c("Ship Date" = "Treatment Date"), match_fun=nearestPastOrPresent)
 
 
 ```
