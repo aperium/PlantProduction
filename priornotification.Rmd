@@ -292,7 +292,7 @@ if(nrow(joined_df_b) <= 0) "empty table. no prior notifications required." |> st
 sapply(joined_df_b$`Receiving State` |> unique(), function(a) {
   joined_df_b |>
     filter(`Receiving State` == a) |>
-    write_xlsx_flex(file.path(paste0(ship_year,"w",ship_week),paste0(a,"_prior_notifications_greenstreet_growers_",ship_year,"w",ship_week,".xlsx")))
+    write_xlsx_flex(dir_path |> path(paste0(ship_year,"w",ship_week),paste0(a,"_prior_notifications_greenstreet_growers_",ship_year,"w",ship_week,".xlsx")))
 })
 
 
