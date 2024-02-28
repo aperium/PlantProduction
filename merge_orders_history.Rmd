@@ -14,7 +14,7 @@ output:
 ```{r setup, echo=FALSE, error=TRUE, message=TRUE, warning=TRUE, include=FALSE}
 # this block loads required packages and some custom functions. 
 
-req_pkgs <- c("rlang", "magrittr", "tidyselect", "tidyverse", "lubridate", "stats", "readr", "measurements", "knitr", "plyr", "tidyr","bibtex","ggpubr","ggplot2", "firatheme", "gt", "ggpmisc", "foreach", "forcats", "doParallel", "parallel", "fs", "purrr", "janitor", "stringdist", "readxl", "writexl", "fuzzyjoin", "openxlsx", "xlsx", "pwr", "effectsize", "Biostrings")
+req_pkgs <- c("rlang", "magrittr", "tidyselect", "tidyverse", "lubridate", "stats", "readr", "measurements", "knitr", "plyr", "tidyr","bibtex","ggpubr","ggplot2", "firatheme", "gt", "ggpmisc", "foreach", "forcats", "doParallel", "parallel", "fs", "purrr", "janitor", "stringdist", "readxl", "writexl", "fuzzyjoin", "pwr", "effectsize", "Biostrings")
 #
 # install & load  # this is pretty fast compared to alternatives.
 find_package_quiet <- function(pkgs) unlist(find.package(pkgs, quiet = TRUE))
@@ -138,27 +138,28 @@ write_xlsx_flex <- function(x, path = tempfile(fileext = ".xlsx")) {
 
 ```{r datasetup, echo=TRUE, error=TRUE, message=FALSE, warning=TRUE}
 
-dir_path <- "Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstreet/Production Planning QC/Plant Sales and Orders" |> path_home()
+dir_path <- "Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstreet/Production Planning QC/Plant Sales and Orders" |> fs::path_home()
 
-e_orders <- dir_path |> path("Express Seed export","express_open_orders_20240228.xlsx") |>
+e_orders <- dir_path |> fs::path("Express Seed export","express_open_orders_20240228.xlsx") |>
   read_xlsx_flex(guess_max = Inf)
 
-e_delivered <- dir_path |> path("Express Seed export","express_shipped_orders_20240228.xlsx") |>
+e_delivered <- dir_path |> fs::path("Express Seed export","express_shipped_orders_20240228.xlsx") |>
   read_xlsx_flex(guess_max = Inf)
 
-b_orders <- dir_path |> path("Ball export","order_download_20240228110813.xlsx") |>
+b_orders <- dir_path |> fs::path("Ball export","order_download_20240228110813.xlsx") |>
   read_xlsx_flex(guess_max = Inf) |>
   mutate(vendor = "Ball",
          "Order Number" = `Order Number` %>% as.character(),
          "Sales Order Date" = `Sales Order Date` %>% ymd(),
-         "Ship Date" = `Ship Date` %>% ymd())
+         "Ship Date" = `Ship Date` %>% ymd(),
+         "Total Extended Value" = `Total Extended Value` |> as.numeric())
 ```
 
 
 ```{r join}
 
 e_combined <- dplyr::full_join(e_orders, e_delivered) |>
-  select("Order #", "Customer PO #", "Order Date", "Ship Date", "Week", "Product #", "Description", "Supplier", "QTY Ordered") |>
+  select("Order #", "Customer PO #", "Order Date", "Ship Date", "Week", "Product #", "Description", "Supplier", "QTY Ordered", "Total") |>
   mutate(vendor = "Express")
 
 # e_names <- e_combined %>% names() 
@@ -177,7 +178,7 @@ e_combined <- dplyr::full_join(e_orders, e_delivered) |>
 #     b_names[match(max(scores),scores)]
 #   }, simplify = "tibble")
 
-alignment <- c("vendor" = "vendor", "Order #" = "Order Number","Customer PO #" = "PO Number", "Order Date" = "Sales Order Date", "Ship Date" = "Ship Date", "Week" = "Ship Week", "Product #" = "Ball Material Number", "Description" = "Variety", "Supplier" = "Supplier", "QTY Ordered" = "Quantity")
+alignment <- c("vendor" = "vendor", "Order #" = "Order Number","Customer PO #" = "PO Number", "Order Date" = "Sales Order Date", "Ship Date" = "Ship Date", "Week" = "Ship Week", "Product #" = "Ball Material Number", "Description" = "Variety", "Supplier" = "Supplier", "QTY Ordered" = "Quantity", "Total" = "Total Extended Value")
 
 joined <- full_join(e_combined, b_orders, by=alignment) %>%
   select(names(alignment))
@@ -206,6 +207,6 @@ joined %<>%
                            .default = "other"))
 
 
-write_xlsx_flex(joined, path = "spring2024_ball&express_v4.xlsx")
+write_xlsx_flex(joined, path = dir_path |> fs::path("2024", "ball express spring 2024", "spring2024_ball&express_v5.xlsx"))
 ```
 
