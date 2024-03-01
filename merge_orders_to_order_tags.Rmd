@@ -192,7 +192,8 @@ joined <- full_join(e_combined, b_orders, by=alignment) %>%
 ```{r filter}
 filtered <- joined |>
   filter(`Ship Date` >= "20240101" |> ymd(),
-         Supplier == "Kube Pak")
+         Supplier |> str_equal("Kube Pak"),
+         (Description |> str_detect("^(HE)|(VF)[:space:]"))|(`Customer PO #` |> str_to_lower() |> str_detect("(herb)|(veg)")))
 
 ```
 
