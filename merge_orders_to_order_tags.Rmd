@@ -2,7 +2,7 @@
 title: Combining orders from Ball and Express for Spring 2024
 author: Daniel R. Williams ^[Director of Quality Control, Greenstreet Growers, Lothian,
   MD] ^[PhD Candidate, Dept. of Ag. & Crop Science, Ohio State University, Columbus,  Ohio]
-date: 22 January 2023
+date: 1 March 2023
 output:
   pdf_document: default
   html_notebook: default
@@ -14,76 +14,80 @@ output:
 ```{r setup, echo=FALSE, error=TRUE, message=TRUE, warning=TRUE, include=FALSE}
 # this block loads required packages and some custom functions. 
 
-req_pkgs <- c("rlang", "magrittr", "tidyselect", "tidyverse", "lubridate", "stats", "readr", "measurements", "knitr", "plyr", "tidyr","bibtex","ggpubr","ggplot2", "firatheme", "gt", "ggpmisc", "foreach", "forcats", "doParallel", "parallel", "fs", "purrr", "janitor", "stringdist", "readxl", "writexl", "fuzzyjoin", "pwr", "effectsize", "Biostrings")
-#
-# install & load  # this is pretty fast compared to alternatives.
-find_package_quiet <- function(pkgs) unlist(find.package(pkgs, quiet = TRUE))
-require_package <- function(pkgs) {
-  # install.packages(setdiff(pkgs,names(unlist(sapply(pkgs,find_package_quiet)))))
-  if(!length(find_package_quiet("pak"))) {
-    install.packages("pak")
-  }
-  install_these <- setdiff(pkgs,pak::pkg_status(pkgs)$package)
-  if(length(install_these)) {
-    pak::pak_update(stream = "rc")
-    pak::pak(install_these, upgrade = TRUE, dependencies = TRUE)
-  }
+cran_pacs <- c("rlang", "pkgbuild","pak","librarian","rmarkdown", "BiocManager", "tidyselect", "tidyverse", "magrittr", "stats", "measurements", "knitr", "foreach", "doParallel", "parallel", "fs", "janitor", "stringr", "readxl", "writexl","fuzzyjoin", "chromote", "pdftools", "reticulate", "lubridate", "readr", "tidyr", "forcats", "purrr", "stringdist") |> unique() # "rvest", "polite", "XML", "tabulizer", "gt"
+dev_pacs <- c() ## "aperium/rutil")
+bioc_pacs <- c("Biostrings")
+py_pacs <- c("camelot-py")
+
+## function to quietly find list of packages
+find_package_quiet <- function(pkgs, ...) unlist(find.package(pkgs, quiet = TRUE, ...))
+install_as_needed <- function(pacs, inst_fun = install.packages, check_fun = find_package_quiet, ...) {
+  inst_fun(setdiff(pacs,names(unlist(sapply(pacs,\(x) check_fun(x))))),...)
 }
-# require_package(c("pak", "librarian"))
-require_package(req_pkgs)
-installed_req_pkgs <- pak::pkg_status(req_pkgs)$package
-#
-librarian::shelf(req_pkgs, quiet = TRUE)
-if((("readxl" %in% req_pkgs)&is_empty(find_package_quiet("readxl")))|(("writexl" %in% req_pkgs)&is_empty(find_package_quiet("writexl")))) librarian::shelf("ycphs/openxlsx") #load openxlsx if read-/write-xl not avail
-if(((("readxl" %in% req_pkgs)&is_empty(find_package_quiet("readxl")))|(("writexl" %in% req_pkgs)&is_empty(find_package_quiet("writexl"))))&(is_empty(find_package_quiet("openxlsx")))) librarian::shelf("colearendt/xlsx") # load xlsx if openxlsx not avail
+
+# install cran packs
+if (length(cran_pacs) > 0) install_as_needed(cran_pacs,install.packages)
+
+# install github dev packs
+if (length(dev_pacs)>0) {
+  if (!require("pak", quietly = TRUE)) install.packages("pak")
+  install_as_needed(dev_pacs,pak::pak, ask = FALSE, upgrade = TRUE)
+}
+
+# install bioc packs
+if (length(bioc_pacs)>0) {
+  if (!require("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+  # install_as_needed(c("DBI","xfun"))
+  BiocManager::install(version = "3.18", update = TRUE, ask=FALSE)
+  install_as_needed(bioc_pacs,BiocManager::install, update = TRUE, ask=FALSE)
+}
+
+
+librarian::shelf(cran_pacs, bioc_pacs, dev_pacs, quiet = TRUE)
+installed_req_pkgs <- pak::pkg_status(c(cran_pacs, bioc_pacs, dev_pacs))$package
+loaded_pacs <- search() |> str_extract("(?<=:).*$") |> na.omit()
+
+
+# install python packs
+if (("reticulate" %in% loaded_pacs) & !py_available(initialize = TRUE)) install_python()
+if (py_available(initialize = TRUE) & (length(py_pacs)>0)) {
+  # py_exe()
+  # py_list_packages()$package
+  py_install(py_pacs)
+  # py_list_packages_names <- function(...) py_list_packages(...)$package
+  # install_as_needed(py_pacs, py_install, py_list_packages_names)
+}
+
+# 
+# req_pkgs <- c("rlang", "magrittr", "tidyselect", "tidyverse", "lubridate", "stats", "readr", "measurements", "knitr", "plyr", "tidyr","bibtex","ggpubr","ggplot2", "firatheme", "gt", "ggpmisc", "foreach", "forcats", "doParallel", "parallel", "fs", "purrr", "janitor", "stringdist", "readxl", "writexl", "fuzzyjoin", "pwr", "effectsize", "Biostrings")
+# #
+# # install & load  # this is pretty fast compared to alternatives.
+# find_package_quiet <- function(pkgs) unlist(find.package(pkgs, quiet = TRUE))
+# require_package <- function(pkgs) {
+#   # install.packages(setdiff(pkgs,names(unlist(sapply(pkgs,find_package_quiet)))))
+#   if(!length(find_package_quiet("pak"))) {
+#     install.packages("pak")
+#   }
+#   install_these <- setdiff(pkgs,pak::pkg_status(pkgs)$package)
+#   if(length(install_these)) {
+#     pak::pak_update(stream = "rc")
+#     pak::pak(install_these, upgrade = TRUE, dependencies = TRUE)
+#   }
+# }
+# # require_package(c("pak", "librarian"))
+# require_package(req_pkgs)
+# installed_req_pkgs <- pak::pkg_status(req_pkgs)$package
+# #
+# librarian::shelf(req_pkgs, quiet = TRUE)
+# if((("readxl" %in% req_pkgs)&is_empty(find_package_quiet("readxl")))|(("writexl" %in% req_pkgs)&is_empty(find_package_quiet("writexl")))) librarian::shelf("ycphs/openxlsx") #load openxlsx if read-/write-xl not avail
+# if(((("readxl" %in% req_pkgs)&is_empty(find_package_quiet("readxl")))|(("writexl" %in% req_pkgs)&is_empty(find_package_quiet("writexl"))))&(is_empty(find_package_quiet("openxlsx")))) librarian::shelf("colearendt/xlsx") # load xlsx if openxlsx not avail
 #
 ## register cores for foreach
 n_cores <- parallel::detectCores()
 # registerDoParallel(cores=n_cores)
 # stopImplicitCluster()
 
-# check_na = function(x) (is.na(x)|str_equal(x,"")|str_equal(x,"N/A", ignore_case = TRUE)|str_equal(x,"NA", ignore_case = TRUE)|(x==0)|is_na(x)|is_chr_na(x)|is_null(x))
-# 
-# column_not_na = function(x) not(all(check_na(x)))
-# 
-# remove_empties = function(x) x %>% dplyr::select(where(column_not_na)) %>% janitor::remove_empty()
-# 
-# na_zero <- function(x) {if_else(is.na(x),0,x)}
-# 
-# round_1 <- function(x) {
-#   round_any(x,1) %>% as.integer()
-# }
-# 
-# round_any_int <- function(x,accuracy = 1,f = round) {
-#   round_any(x,accuracy,f) %>% as.integer()
-# }
-# 
-# # function for summarizing names by finding the one the best fits a match in another list
-# bestmatch <- function(old_values, new_values) {
-#   ovs <- old_values %>% as.character() %>% str_to_lower()
-#   nvs <- new_values %>% as.character() %>% str_to_lower()
-#   # tibble(var = select, 
-#   #        mindist= foreach::foreach(i=1:length(var)) %dopar% min(stringdist::afind(against, var)$distance[,i]) %>% unlist()) %>% dplyr::filter(mindist == min(.$mindist)) %>% .$var %>% unlist() %>% .[1]
-#   distmat <- stringdist::afind(nvs, ovs, method='lcs') %>% .$distance
-#   registerDoParallel(parallel::detectCores()-1)
-#   out <- foreach::foreach(i=1:length(ovs), .combine = c, .packages = installed_req_pkgs, .export = c("distmat","new_values")) %dopar% new_values[distmat[,i] == min(distmat[,i])][1]
-#   stopImplicitCluster()
-#   return(out)
-# }
-# bestmatch(c("alpaca","butter", "zebra", "quality", "zygo"), c("epsilon", "alpha", "beta", "gamma", "delta", "zeta"))
 
-## searches all common columns between data.frames x & y for matching values of x in y. Returns a logical vector of length nrow(x).
-## In tidyverse functions use `.` to explicitly place the scoped frame as x: (eg. `dplyr::filter(<df1>, match_in(.,<df2>))`).
-## Note: `dplyr::anti_join` and `dplyr::semi_join` are likely faster and more robust for the filtering use case.
-# match_in <- function(x,y) {foreach(i=1:nrow(x), .combine = c, .packages = installed_req_pkgs, .export= c("x", "y")) %dopar% (slice(x,i) %>% remove_empties() %>% match_df(y) %>% empty() %>% not())}
-
-## paste rowwise
-# vector_paste <- function(x,y, sep=" ") {
-#   registerDoParallel(parallel::detectCores()-1)
-#   out <- foreach::foreach(i=1:length(x), .packages = installed_req_pkgs, .export = c("x","y","sep")) %dopar% janitor::paste_skip_na(x[i],y[i],sep = sep) %>% unlist()
-#   stopImplicitCluster()
-#   return(out)
-#   }
 
 ```
 
