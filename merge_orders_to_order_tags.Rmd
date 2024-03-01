@@ -189,29 +189,18 @@ joined <- full_join(e_combined, b_orders, by=alignment) %>%
 
 ```
 
+```{r filter}
+filtered <- joined |>
+  filter(`Ship Date` >= "20240101" |> ymd(),
+         Supplier == "Kube Pak")
+
+```
+
+
 
 ```{r export}
-joined %<>%
-  mutate(size = case_when(str_detect(`Customer PO #`,"(^4.5)|(4.5[:space:]?((IN)|(in)|(\")))") ~ "4.5 in",
-                           str_detect(`Customer PO #`,"^804") ~ "804",
-                           str_detect(`Customer PO #`,"(^10)|(10[:space:]?((IN)|(in)|(\"))).*((HB)|(BSKT)|(BASKET))")  ~ "10 in hb",
-                           str_detect(`Customer PO #`,"(^8)|(8[:space:]?((IN)|(in)|(\"))).*((HB)|(BSKT)|(BASKET))")  ~ "8 in hb",
-                           str_detect(`Customer PO #`,"(^12)|(12[:space:]?((IN)|(in)|(\"))).*((HB)|(BSKT)|(BASKET))")  ~ "12 in hb",
-                           str_detect(`Customer PO #`,"(^11)|(11[:space:]?((IN)|(in)|(\"))).*((HB)|(BSKT)|(BASKET))")  ~ "11 in hb",
-                           str_detect(`Customer PO #`,"(^14)|(14[:space:]?((IN)|(in)|(\")))")  ~ "14 in",
-                           str_detect(`Customer PO #`,"(^4)|(4[:space:]?((IN)|(in)|(\")))")  ~ "4 in",
-                           str_detect(`Customer PO #`,"(^6)|(6[:space:]?((IN)|(in)|(\")))")  ~ "6 in",
-                           str_detect(`Customer PO #`,"(^12)|(12[:space:]?((IN)|(in)|(\")))")  ~ "12 in",
-                           str_detect(`Customer PO #`,"(^11)|(11[:space:]?((IN)|(in)|(\")))")  ~ "11 in",
-                           str_detect(`Customer PO #`,"(^10)|(10[:space:]?((IN)|(in)|(\")))")  ~ "10 in",
-                           str_detect(`Customer PO #`,"1[:space:]?((GAL)|(G[:space:])|(G$))")  ~ "1 gal",
-                           str_detect(`Customer PO #`,"((HB)|(BSKT)|(BASKET))")  ~ "10 in hb",
-                           str_detect(`Customer PO #`,"^(liner)|(LINER)")  ~ "liner",
-                           str_detect(`Customer PO #`,"^PW")  ~ "PW",
-                           .default = "other"))
-
-
-write_xlsx_flex(joined, path = dir_path |> fs::path("2024", "ball express spring 2024", "spring2024_ball&express_v5.xlsx"))
+filtered |>
+  write_xlsx_flex(path = dir_path |> fs::path("2024", "herbveg 2024", paste0("tags_to_order_",now() |> year(), now() |> isoweek() |> str_pad(2,"left",pad="0"),".xlsx")))
 ```
 
 ```{r averages}
