@@ -8,7 +8,13 @@ output:
   html_notebook: default
 ---
 
-# Abstract
+# To Do
+
+- [ ] merge with a table of plugs per sell_unit, like:
+  - 4 plugs per 4-pak -> 1 tag
+  - lettuce is 2+ plugs per 4in -> 1 tag
+  - tomato is 1 ppp -> 1 tag pp
+- [ ] read-in MasterTag orders list to subtract from need_to_order
 
 
 ```{r setup, echo=FALSE, error=TRUE, message=TRUE, warning=TRUE, include=FALSE}
@@ -191,7 +197,7 @@ joined <- full_join(e_combined, b_orders, by=alignment) %>%
 
 ```{r filter}
 filtered <- joined |>
-  filter(`Ship Date` >= "20240101" |> ymd(),
+  filter(`Ship Date` >= "20231201" |> ymd(),
          Supplier |> str_equal("Kube Pak"),
          (Description |> str_detect("^(HE)|(VF)[:space:]"))|(`Customer PO #` |> str_to_lower() |> str_detect("(herb)|(veg)")))
 
@@ -204,7 +210,7 @@ filtered |>
   write_xlsx_flex(path = dir_path |> fs::path("2024", "herbveg 2024", paste0("tags_to_order_",now() |> year(), now() |> isoweek() |> str_pad(2,"left",pad="0"),".xlsx")))
 ```
 
-```{r averages}
+```{r averages, eval=FALSE}
 
 plugs_tbl <- tibble_row(size = "4 in", plugs = 1) |> # .25
   tibble::add_case(size = "4.5 in", plugs = 1)|> # .07
