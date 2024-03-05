@@ -191,7 +191,7 @@ google_get_address <- function(query = NULL) {
 
 ```{r getinput, echo=TRUE, error=TRUE, message=FALSE, warning=TRUE}
 
-ship_week <- "09"
+ship_week <- "10"
 ship_year <- "2024"
 
 dir_path <- "Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstreet/Production Planning QC/Compliance/Ball Liners 2024" |> path_home()
