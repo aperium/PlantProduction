@@ -8,7 +8,9 @@ output:
   html_notebook: default
 ---
 
-# Abstract
+# Todo
+
+- [ ] Bug with merging the treatments table. Looks like a full join rather than picking the most recent treatment.
 
 ```{r setup, echo=FALSE, error=TRUE, message=TRUE, warning=TRUE, include=FALSE}
 # this block loads required packages and some custom functions. 
