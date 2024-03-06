@@ -15,7 +15,7 @@ output:
   - tomato is 1 ppp -> 1 tag pp
 - [ ] subtract tags ordered from tags needed
   - [X] read-in MasterTag orders list
-  - [ ] join to plant orders table with some name alignemtn function, probably using fuzzyjoin
+  - [ ] join to plant orders table with some name alignemtn function, probably using fuzzyjoin. Consider Biostrings::pairwiseAlignment()
   - [ ] subtract from need_to_order
 
 
