@@ -163,6 +163,12 @@ b_orders <- dir_path |> fs::path("Ball export","order_download_20240228110813.xl
          "Sales Order Date" = `Sales Order Date` %>% ymd(),
          "Ship Date" = `Ship Date` %>% ymd(),
          "Total Extended Value" = `Total Extended Value` |> as.numeric())
+
+tag_dir <- "Greenstreet Growers\TeamSite - Documents\Shared\Production Greenstreet\Production Planning QC\Tags\MasterTag" |> fs::path_home()
+
+tag_orders <- tag_dir |> fs::path("GREENSTREET_GROWERS_INC_Order Export_03_06_2024.xlsx") |>
+  read_xlsx_flex(guess_max = Inf)
+
 ```
 
 
