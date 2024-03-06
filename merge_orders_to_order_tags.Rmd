@@ -2,9 +2,8 @@
 title: Combining orders from Ball and Express for Spring 2024
 author: Daniel R. Williams ^[Director of Quality Control, Greenstreet Growers, Lothian,
   MD] ^[PhD Candidate, Dept. of Ag. & Crop Science, Ohio State University, Columbus,  Ohio]
-date: 1 March 2023
+date: 6 March 2023
 output:
-  pdf_document: default
   html_notebook: default
 ---
 
@@ -14,7 +13,9 @@ output:
   - 4 plugs per 4-pak -> 1 tag
   - lettuce is 2+ plugs per 4in -> 1 tag
   - tomato is 1 ppp -> 1 tag pp
-- [ ] read-in MasterTag orders list to subtract from need_to_order
+- [ ] subtract tags ordered from tags needed
+  - [X] read-in MasterTag orders list
+  - [ ] subtract from need_to_order
 
 
 ```{r setup, echo=FALSE, error=TRUE, message=TRUE, warning=TRUE, include=FALSE}
@@ -151,23 +152,27 @@ write_xlsx_flex <- function(x, path = tempfile(fileext = ".xlsx")) {
 dir_path <- "Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstreet/Production Planning QC/Plant Sales and Orders" |> fs::path_home()
 
 e_orders <- dir_path |> fs::path("Express Seed export","express_open_orders_20240228.xlsx") |>
-  read_xlsx_flex(guess_max = Inf)
+  read_xlsx_flex(guess_max = as.integer(.Machine$integer.max/100))
 
 e_delivered <- dir_path |> fs::path("Express Seed export","express_shipped_orders_20240228.xlsx") |>
-  read_xlsx_flex(guess_max = Inf)
+  read_xlsx_flex(guess_max = as.integer(.Machine$integer.max/100))
 
 b_orders <- dir_path |> fs::path("Ball export","order_download_20240228110813.xlsx") |>
-  read_xlsx_flex(guess_max = Inf) |>
+  read_xlsx_flex(guess_max = as.integer(.Machine$integer.max/100)) |>
   mutate(vendor = "Ball",
          "Order Number" = `Order Number` %>% as.character(),
          "Sales Order Date" = `Sales Order Date` %>% ymd(),
          "Ship Date" = `Ship Date` %>% ymd(),
          "Total Extended Value" = `Total Extended Value` |> as.numeric())
 
-tag_dir <- "Greenstreet Growers\TeamSite - Documents\Shared\Production Greenstreet\Production Planning QC\Tags\MasterTag" |> fs::path_home()
+mtag_dir <- "Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstreet/Production Planning QC/Tags/MasterTag" |> fs::path_home()
+mtag_path <- tag_dir |> fs::path("GREENSTREET_GROWERS_INC_Order Export_03_06_2024.xlsx")
 
-tag_orders <- tag_dir |> fs::path("GREENSTREET_GROWERS_INC_Order Export_03_06_2024.xlsx") |>
-  read_xlsx_flex(guess_max = Inf)
+registerDoParallel(cores=n_cores-1)
+mtag_orders <- foreach(i=c(2,1), .combine = left_join) %dopar% {
+  read_xlsx_flex(path = tag_path, sheet = i, guess_max = as.integer(.Machine$integer.max/100))
+}
+stopImplicitCluster()
 
 ```
 
