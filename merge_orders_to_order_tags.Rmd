@@ -154,11 +154,11 @@ dir_path <- "Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstr
 
 e_orders <- dir_path |> fs::path("Express Seed export","express_open_orders_20240228.xlsx") |>
   read_xlsx_flex(guess_max = as.integer(.Machine$integer.max/100)) |> 
-  dplyr::select(where(shiny::isTruthy))
+  janitor::remove_empty()
 
 e_delivered <- dir_path |> fs::path("Express Seed export","express_shipped_orders_20240228.xlsx") |>
   read_xlsx_flex(guess_max = as.integer(.Machine$integer.max/100)) |> 
-  dplyr::select(where(shiny::isTruthy))
+  janitor::remove_empty()
 
 b_orders <- dir_path |> fs::path("Ball export","order_download_20240228110813.xlsx") |>
   read_xlsx_flex(guess_max = as.integer(.Machine$integer.max/100)) |>
@@ -167,7 +167,7 @@ b_orders <- dir_path |> fs::path("Ball export","order_download_20240228110813.xl
          "Sales Order Date" = `Sales Order Date` %>% ymd(),
          "Ship Date" = `Ship Date` %>% ymd(),
          "Total Extended Value" = `Total Extended Value` |> as.numeric()) |> 
-  dplyr::select(where(shiny::isTruthy))
+  janitor::remove_empty()
 
 mtag_dir <- "Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstreet/Production Planning QC/Tags/MasterTag" |> fs::path_home()
 mtag_path <- tag_dir |> fs::path("GREENSTREET_GROWERS_INC_Order Export_03_06_2024.xlsx")
@@ -175,7 +175,7 @@ mtag_path <- tag_dir |> fs::path("GREENSTREET_GROWERS_INC_Order Export_03_06_202
 registerDoParallel(cores=n_cores-1)
 mtag_orders <- foreach(i=c(2,1), .combine = left_join) %dopar% {
   read_xlsx_flex(path = tag_path, sheet = i, guess_max = as.integer(.Machine$integer.max/100))
-} |> dplyr::select(where(shiny::isTruthy))
+} |> janitor::remove_empty()
 stopImplicitCluster()
 
 ```
