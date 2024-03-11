@@ -244,11 +244,12 @@ tracking_df <- tracking_path %>% read_xlsx_flex() %>%
   dplyr::rows_patch()
 
 tracking_df |>
-  dplyr::rows_patch(unite(data=tracking_df,col="zip",all_of(c("Customer Name","Comments","Receiving City","Receiving State")), sep = " ", remove = FALSE, na.rm = TRUE) |>
-                      mutate(googleaddress = zip |> google_get_address()) |> 
+  dplyr::rows_patch(unite(data=tracking_df,col="addressq",all_of(c("Customer Name","Comments","Receiving City","Receiving State")), sep = " ", remove = FALSE, na.rm = TRUE) |>
+                      select(!c("Receiving City","Receiving State","Receiving ZIP")) |>
+                      mutate(googleaddress = addressq |> google_get_address()) |> 
                       separate_wider_delim(cols = googleaddress, delim = ", ", names = c("Receiving Street","Receiving City","statezip")) |>
                       separate_wider_delim(cols = statezip, delim = " ", names = c("Receiving State","Receiving ZIP")) |>
-                      select(-"Receiving Street"))
+                      select(-c("Receiving Street")))
   
   
   
