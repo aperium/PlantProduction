@@ -231,10 +231,10 @@ tracking_df <- tracking_path %>% read_xlsx_flex() %>%
   distinct() %>%
   mutate("Receiving City" = `Receiving Location` %>% str_squish() %>% str_remove("[:punct:]?[:space:][:alpha:]{2}$"),
          "Receiving State" = `Receiving Location` %>% str_squish() %>% str_remove(".*[:space:](?=[:alpha:]{2}$)"),
-         "Receiving ZIP" = rlang::na_chr) |>
+         "Receiving ZIP" = rlang::na_chr) %>%
          # "Receiving ZIP" = rutil::google_get_address(paste(`Customer Name`,Comments,`Receiving City`,`Receiving State`)) |> str_squish() |> str_extract("[:digit:]{5}(-[:digit:]{4})?$")
   # mutate("Receiving Zip" = unite(data=.,col="zip",all_of(c("Customer Name","Comments","Receiving City","Receiving State")), sep = " ", remove = FALSE, na.rm = TRUE) |> pull(var=zip) |> google_get_address() |> str_squish() |> str_extract("[:digit:]{5}(-[:digit:]{4})?$"))|>
-  dplyr::rows_patch(y = unite(data=tracking_df,col="addressq",all_of(c("Customer Name","Comments","Receiving City","Receiving State")), sep = " ", remove = FALSE, na.rm = TRUE) |>
+  dplyr::rows_patch(y = unite(data=.,col="addressq",all_of(c("Customer Name","Comments","Receiving City","Receiving State")), sep = " ", remove = FALSE, na.rm = TRUE) |>
                       select(!c("Receiving City","Receiving State","Receiving ZIP")) |>
                       mutate(googleaddress = addressq |> google_get_address()) |> 
                       separate_wider_delim(cols = googleaddress, delim = ", ", names = c("Receiving Street","Receiving City","statezip")) |>
