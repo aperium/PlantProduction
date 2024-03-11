@@ -249,7 +249,7 @@ tracking_df |>
                       mutate(googleaddress = addressq |> google_get_address()) |> 
                       separate_wider_delim(cols = googleaddress, delim = ", ", names = c("Receiving Street","Receiving City","statezip")) |>
                       separate_wider_delim(cols = statezip, delim = " ", names = c("Receiving State","Receiving ZIP")) |>
-                      select(-c("Receiving Street")))
+                      select(-c("Receiving Street", "addressq")))
   
   
   
