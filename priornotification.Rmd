@@ -11,6 +11,7 @@ output:
 # Todo
 
 - [ ] Bug with merging the treatments table. Looks like a full join rather than picking the most recent treatment.
+- [ ] if chromate fails, retry?
 - [ ] If the there are blanks in the address fields, fill them all in with google search.
 
 ```{r setup, echo=FALSE, error=TRUE, message=TRUE, warning=TRUE, include=FALSE}
@@ -146,13 +147,6 @@ google_get_address <- function(query = NULL) {
   return(results)
 }
 
-"CHEVY CHASE CLUB" |> google_get_address() 
-
-tibble_row(row1 = "6100 Connecticut Ave, Chevy Chase, MD 20815") |> 
-  separate_wider_delim(cols = row1, delim = ", ", names = c("street","city","statezip")) |>
-  separate_wider_delim(cols = statezip, delim = " ", names = c("state","zip"))
-
-
 
 ## quick using google to get the address from any text query. Works best if the query is a mostly complete address.
 ## let query be a list of strings. Internally reduce to unique queries and then re expand to same lenth as query for return.
@@ -237,23 +231,16 @@ tracking_df <- tracking_path %>% read_xlsx_flex() %>%
   distinct() %>%
   mutate("Receiving City" = `Receiving Location` %>% str_squish() %>% str_remove("[:punct:]?[:space:][:alpha:]{2}$"),
          "Receiving State" = `Receiving Location` %>% str_squish() %>% str_remove(".*[:space:](?=[:alpha:]{2}$)"),
-         "Receiving ZIP" = NA)
-
+         "Receiving ZIP" = rlang::na_chr) |>
          # "Receiving ZIP" = rutil::google_get_address(paste(`Customer Name`,Comments,`Receiving City`,`Receiving State`)) |> str_squish() |> str_extract("[:digit:]{5}(-[:digit:]{4})?$")
   # mutate("Receiving Zip" = unite(data=.,col="zip",all_of(c("Customer Name","Comments","Receiving City","Receiving State")), sep = " ", remove = FALSE, na.rm = TRUE) |> pull(var=zip) |> google_get_address() |> str_squish() |> str_extract("[:digit:]{5}(-[:digit:]{4})?$"))|>
-  dplyr::rows_patch()
-
-tracking_df |>
   dplyr::rows_patch(y = unite(data=tracking_df,col="addressq",all_of(c("Customer Name","Comments","Receiving City","Receiving State")), sep = " ", remove = FALSE, na.rm = TRUE) |>
                       select(!c("Receiving City","Receiving State","Receiving ZIP")) |>
                       mutate(googleaddress = addressq |> google_get_address()) |> 
                       separate_wider_delim(cols = googleaddress, delim = ", ", names = c("Receiving Street","Receiving City","statezip")) |>
                       separate_wider_delim(cols = statezip, delim = " ", names = c("Receiving State","Receiving ZIP")) |>
-                      select(-c("Receiving Street", "addressq")),
-                    by = "Document No.")
-  
-  
-  
+                      select(c("Document No.","Receiving City","Receiving State","Receiving ZIP")),
+                    unmatched = "ignore") |>
   select(-`Receiving Location`, -`Drop Point Location`, -`Drop Point Name`) |>
   distinct(`Supplier Description`,`Customer Name`, `Ship Week`, `Document No.`, .keep_all = TRUE) ## This is a work around for when there are lines for a single order shipping by multiple carriers. Improvement might make a more informed decision about which line to choose. This just picks the first one listed.  
 
