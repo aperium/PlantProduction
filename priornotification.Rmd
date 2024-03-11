@@ -12,7 +12,7 @@ output:
 
 - [ ] Bug with merging the treatments table. Looks like a full join rather than picking the most recent treatment.
 - [ ] if chromate fails, retry?
-- [ ] If the there are blanks in the address fields, fill them all in with google search.
+- [x] If the there are blanks in the address fields, fill them all in with google search.
 
 ```{r setup, echo=FALSE, error=TRUE, message=TRUE, warning=TRUE, include=FALSE}
 # this block loads required packages and some custom functions. 
