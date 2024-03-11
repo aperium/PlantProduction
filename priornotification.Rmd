@@ -11,6 +11,7 @@ output:
 # Todo
 
 - [ ] Bug with merging the treatments table. Looks like a full join rather than picking the most recent treatment.
+- [ ] If the there are blanks in the address fields, fill them all in with google search.
 
 ```{r setup, echo=FALSE, error=TRUE, message=TRUE, warning=TRUE, include=FALSE}
 # this block loads required packages and some custom functions. 
@@ -145,6 +146,14 @@ google_get_address <- function(query = NULL) {
   return(results)
 }
 
+"CHEVY CHASE CLUB" |> google_get_address() 
+
+tibble_row(row1 = "6100 Connecticut Ave, Chevy Chase, MD 20815") |> 
+  separate_wider_delim(cols = row1, delim = ", ", names = c("street","city","statezip")) |>
+  separate_wider_delim(cols = statezip, delim = " ", names = c("state","zip"))
+
+
+
 ## quick using google to get the address from any text query. Works best if the query is a mostly complete address.
 ## let query be a list of strings. Internally reduce to unique queries and then re expand to same lenth as query for return.
 # google_get_address <- function(query) {
@@ -218,6 +227,8 @@ orders_df <- orders_path %>% read_xlsx_flex() %>%
          .before = contains("quantity")) |>
   select(-"Material Description")
 
+# TODO use dplyr::rows_patch() to update all empty address fields with google.
+
 tracking_df <- tracking_path %>% read_xlsx_flex() %>%
   left_join(tracking_path %>% read_xlsx_flex() %>% dplyr::select("Ship-To...","Drop Point Location") %>% dplyr::filter(!is.na(`Drop Point Location`)) %>% dplyr::rename("Receiving Location" = "Drop Point Location") %>% distinct()) %>%
   dplyr::filter(str_equal(`Product Type`,"PROD", ignore_case = TRUE)) %>%
@@ -225,9 +236,24 @@ tracking_df <- tracking_path %>% read_xlsx_flex() %>%
   select(!any_of(c("...10","CFIA Number","Split","Status","Product Type","Ship-To...","Carrier","Supplier"))) %>%
   distinct() %>%
   mutate("Receiving City" = `Receiving Location` %>% str_squish() %>% str_remove("[:punct:]?[:space:][:alpha:]{2}$"),
-         "Receiving State" = `Receiving Location` %>% str_squish() %>% str_remove(".*[:space:](?=[:alpha:]{2}$)")) %>%
+         "Receiving State" = `Receiving Location` %>% str_squish() %>% str_remove(".*[:space:](?=[:alpha:]{2}$)"),
+         "Receiving ZIP" = NA)
+
          # "Receiving ZIP" = rutil::google_get_address(paste(`Customer Name`,Comments,`Receiving City`,`Receiving State`)) |> str_squish() |> str_extract("[:digit:]{5}(-[:digit:]{4})?$")
-  mutate("Receiving Zip" = unite(data=.,col="zip",all_of(c("Customer Name","Comments","Receiving City","Receiving State")), sep = " ", remove = FALSE, na.rm = TRUE) |> pull(var=zip) |> google_get_address() |> str_squish() |> str_extract("[:digit:]{5}(-[:digit:]{4})?$"))|>
+  # mutate("Receiving Zip" = unite(data=.,col="zip",all_of(c("Customer Name","Comments","Receiving City","Receiving State")), sep = " ", remove = FALSE, na.rm = TRUE) |> pull(var=zip) |> google_get_address() |> str_squish() |> str_extract("[:digit:]{5}(-[:digit:]{4})?$"))|>
+  dplyr::rows_patch()
+
+tracking_df |>
+  dplyr::rows_patch(unite(data=tracking_df,col="zip",all_of(c("Customer Name","Comments","Receiving City","Receiving State")), sep = " ", remove = FALSE, na.rm = TRUE) |>
+                      pull(var=zip) |> 
+                      google_get_address() |> 
+                      as_tibble()  |> 
+                      separate_wider_delim(cols = value, delim = ", ", names = c("Receiving Street","Receiving City","statezip")) |>
+                      separate_wider_delim(cols = statezip, delim = " ", names = c("Receiving State","Receiving ZIP")) |>
+                      select(-"Receiving Street"))
+  
+  
+  
   select(-`Receiving Location`, -`Drop Point Location`, -`Drop Point Name`) |>
   distinct(`Supplier Description`,`Customer Name`, `Ship Week`, `Document No.`, .keep_all = TRUE) ## This is a work around for when there are lines for a single order shipping by multiple carriers. Improvement might make a more informed decision about which line to choose. This just picks the first one listed.  
 
