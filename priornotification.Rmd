@@ -304,7 +304,8 @@ joined_df_b <- joined_df_a |>
                 "Ship Method" = "Carrier Description",
                 "Material Quantity" = "Univoiced Quantity") |>
   relocate(contains("sender"), contains("receiv"), "Document No.", contains("ship"), "Tracking No.", contains("date"), contains("material")) |>
-  fuzzyjoin::fuzzy_left_join(treatment_df, by=c("Ship Date" = "Treatment Date"), match_fun=nearestPastOrPresent)
+  left_join(treatment_df, join_by(closest("Ship Date" >= "Treatment Date")))
+
 
 
 ```
