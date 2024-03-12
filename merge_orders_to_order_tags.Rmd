@@ -183,7 +183,8 @@ b_orders <- foreach::foreach(i=order(b_files), .combine = \(x,y) dplyr::rows_ups
   janitor::remove_empty("rows") |>
     dplyr::distinct() |>
     dplyr::filter(!is.na(`Order Number`))
-  } |> janitor::remove_empty()
+  } |> janitor::remove_empty() |>
+  unite(col = "Description", any_of(c("Class","Variety")), sep = " ", remove = FALSE)
 # stopImplicitCluster()
 
 # old ball import method
@@ -221,7 +222,7 @@ stopImplicitCluster()
 ```
 
 
-```{r join}
+```{r e_b_join}
 
 e_combined <- dplyr::full_join(e_orders, e_delivered) |>
   select("Order #", "Customer PO #", "Order Date", "Ship Date", "Week", "Product #", "Description", "Supplier", "QTY Ordered", "Total") |>
@@ -243,10 +244,12 @@ e_combined <- dplyr::full_join(e_orders, e_delivered) |>
 #     b_names[match(max(scores),scores)]
 #   }, simplify = "tibble")
 
-alignment <- c("vendor" = "vendor", "Order #" = "Order Number","Customer PO #" = "PO Number", "Order Date" = "Sales Order Date", "Ship Date" = "Ship Date", "Week" = "Ship Week", "Product #" = "Ball Material Number", "Description" = "Variety", "Supplier" = "Supplier", "QTY Ordered" = "Quantity", "Total" = "Total Extended Value")
+alignment <- c("vendor" = "vendor", "Order #" = "Order Number","Customer PO #" = "PO Number", "Order Date" = "Sales Order Date", "Ship Date" = "Ship Date", "Week" = "Ship Week", "Product #" = "Ball Material Number", "Description" = "Description", "Supplier" = "Supplier", "QTY Ordered" = "Quantity", "Total" = "Total Extended Value")
 
 joined <- full_join(e_combined, b_orders, by=alignment) %>%
   select(names(alignment))
+
+# TODO clean up description. remove duplicate words, symbols, caps
 
 ```
 
@@ -254,7 +257,13 @@ joined <- full_join(e_combined, b_orders, by=alignment) %>%
 filtered <- joined |>
   filter(`Ship Date` >= "20231201" |> ymd(),
          Supplier |> str_equal("Kube Pak"),
-         (Description |> str_detect("^(HE)|(VF)[:space:]"))|(`Customer PO #` |> str_to_lower() |> str_detect("(herb)|(veg)")))
+         (Description |> str_detect("(^|[:space:])(HE)|(VF)[:space:]"))|(`Customer PO #` |> str_to_lower() |> str_detect("(herb)|(veg)")))
+
+```
+
+```{r mtag_join}
+
+
 
 ```
 
