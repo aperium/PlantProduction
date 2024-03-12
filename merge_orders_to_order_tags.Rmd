@@ -151,6 +151,8 @@ write_xlsx_flex <- function(x, path = tempfile(fileext = ".xlsx")) {
 
 ```{r datasetup, echo=TRUE, error=TRUE, message=FALSE, warning=TRUE}
 
+registerDoParallel(cores=n_cores-1)
+
 plants_dir <- "Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstreet/Production Planning QC/Plant Sales and Orders" |> fs::path_home()
 tags_dir <- "Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstreet/Production Planning QC/Tags/" |> fs::path_home()
 
@@ -163,7 +165,6 @@ e_delivered <- plants_dir |> fs::path("Express Seed export","express_shipped_ord
   janitor::remove_empty()
 
 b_files <- plants_dir |> fs::path("Ball export") |> fs::dir_ls() |> fs::path_filter(regex = "order_download_.*\\.xlsx")
-registerDoParallel(cores=n_cores-1)
 b_orders <- foreach::foreach(i=order(b_files), .combine = \(x,y) dplyr::rows_upsert(x,y,by = c("Order Number", "Order Line"))) %dopar% { read_xlsx_flex(b_files[i], guess_max = as.integer(.Machine$integer.max/100)) |>
   dplyr::mutate(vendor = "Ball",
          "Order Number" = `Order Number` |> as.character(),
@@ -183,7 +184,7 @@ b_orders <- foreach::foreach(i=order(b_files), .combine = \(x,y) dplyr::rows_ups
     dplyr::distinct() |>
     dplyr::filter(!is.na(`Order Number`))
   } |> janitor::remove_empty()
-stopImplicitCluster()
+# stopImplicitCluster()
 
 # old ball import method
 # b_orders <- dir_path |> fs::path("Ball export","order_download_20240228110813.xlsx") |>
@@ -197,7 +198,7 @@ stopImplicitCluster()
 
 # todo fix order function
 mtag_files <- tags_dir |> fs::path("MasterTag") |> fs::dir_ls() |> fs::path_filter(regex = "GREENSTREET_GROWERS_INC_Order Export_.*\\.xlsx")
-registerDoParallel(cores=n_cores-1)
+# registerDoParallel(cores=n_cores-1)
 mtag_orders <- foreach::foreach(i=order(mtag_files), .combine = \(x,y) dplyr::rows_upsert(x,y,by = c("MT Sales Order #", "MT ID")), .packages = c("foreach")) %dopar% { 
   foreach(j=c(2,1), .combine = dplyr::left_join) %dopar% {
     read_xlsx_flex(path = mtag_files[i], sheet = j, guess_max = as.integer(.Machine$integer.max/100))
@@ -205,7 +206,7 @@ mtag_orders <- foreach::foreach(i=order(mtag_files), .combine = \(x,y) dplyr::ro
     dplyr::distinct()
   } |> janitor::remove_empty() |>
     dplyr::mutate(vendor = "MasterTag")
-stopImplicitCluster()
+
 
 # old mtag import method
 # mtag_path <- tags_dir |> fs::path("MasterTag") |> fs::path("GREENSTREET_GROWERS_INC_Order Export_03_06_2024.xlsx")
@@ -214,6 +215,8 @@ stopImplicitCluster()
 #   read_xlsx_flex(path = mtag_path, sheet = i, guess_max = as.integer(.Machine$integer.max/100))
 # } |> janitor::remove_empty()
 # stopImplicitCluster()
+
+stopImplicitCluster()
 
 ```
 
