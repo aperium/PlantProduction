@@ -263,6 +263,9 @@ filtered <- joined |>
 
 ```{r mtag_join}
 
+Biostrings::pairwiseAlignment()
+
+# can i use dplyr::join with dplyr::closest() with pairwiseAligment scores? or maybei need to use fuzzyjoin
 
 
 ```
