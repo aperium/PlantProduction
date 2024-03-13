@@ -17,7 +17,7 @@ output:
   - [X] read-in MasterTag orders list
   - [ ] join to plant orders table with some name alignemtn function, probably using fuzzyjoin. Consider Biostrings::pairwiseAlignment()
   - [ ] subtract from need_to_order
-- [ ] combine multiple history files from ball so I don't have to download the whole thing every time. use dplyr::upsert()
+- [x] combine multiple history files from ball so I don't have to download the whole thing every time. use dplyr::upsert()
 
 
 ```{r setup, echo=FALSE, error=TRUE, message=TRUE, warning=TRUE, include=FALSE}
@@ -206,7 +206,8 @@ mtag_orders <- foreach::foreach(i=order(mtag_files), .combine = \(x,y) dplyr::ro
   } |> janitor::remove_empty("rows") |>
     dplyr::distinct()
   } |> janitor::remove_empty() |>
-    dplyr::mutate(vendor = "MasterTag")
+    dplyr::mutate(vendor = "MasterTag",
+                  "Estimated Ship Date" = `Estimated Ship Date` |> mdy())
 
 
 # old mtag import method
@@ -247,9 +248,9 @@ e_combined <- dplyr::full_join(e_orders, e_delivered) |>
 alignment <- c("vendor" = "vendor", "Order #" = "Order Number","Customer PO #" = "PO Number", "Order Date" = "Sales Order Date", "Ship Date" = "Ship Date", "Week" = "Ship Week", "Product #" = "Ball Material Number", "Description" = "Description", "Supplier" = "Supplier", "QTY Ordered" = "Quantity", "Total" = "Total Extended Value")
 
 joined <- full_join(e_combined, b_orders, by=alignment) %>%
-  select(names(alignment))
-
-# TODO clean up description. remove duplicate words, symbols, caps
+  select(names(alignment)) |>
+  rowwise() |>
+  mutate(Description = Description |> str_to_lower() |> str_extract_all("([:alpha:]{2,})|([:digit:]*(\\.[:digit:]+)(?!C$))", simplify = TRUE) |> unique() |> as.character() |> str_flatten(collapse = " "))
 
 ```
 
@@ -265,7 +266,7 @@ filtered <- joined |>
 
 Biostrings::pairwiseAlignment()
 
-# can i use dplyr::join with dplyr::closest() with pairwiseAligment scores? or maybei need to use fuzzyjoin
+# can i use dplyr::join with dplyr::closest() with pairwiseAligment scores? or maybe need to use fuzzyjoin
 
 
 ```
@@ -275,6 +276,9 @@ Biostrings::pairwiseAlignment()
 ```{r export}
 filtered |>
   write_xlsx_flex(path = dir_path |> fs::path("2024", "herbveg 2024", paste0("tags_to_order_",now() |> year(), now() |> isoweek() |> str_pad(2,"left",pad="0"),".xlsx")))
+
+
+
 ```
 
 ```{r averages, eval=FALSE}
