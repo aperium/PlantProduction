@@ -25,7 +25,7 @@ output:
 
 cran_pacs <- c("rlang", "pkgbuild","librarian", "pak", "rmarkdown", "tidyselect", "tidyverse", "magrittr", "stats", "measurements", "knitr", "foreach", "doParallel", "parallel", "fs", "janitor", "stringr", "readxl", "writexl","fuzzyjoin", "chromote", "pdftools", "lubridate", "readr", "tidyr", "forcats", "purrr", "stringdist") |> unique() # "rvest", "polite", "XML", "tabulizer", "gt"
 dev_pacs <- c() ## "aperium/rutil")
-bioc_pacs <- c("Biostrings","msa")
+bioc_pacs <- c("Biostrings") #,"msa")
 py_pacs <- c("camelot-py")
 
 ## function to quietly find list of packages
@@ -263,6 +263,7 @@ filtered <- joined |>
 ```{r mtag_join}
 
 Biostrings::pairwiseAlignment()
+
 
 # can i use dplyr::join with dplyr::closest() with pairwiseAligment scores? or maybe need to use fuzzyjoin
 
