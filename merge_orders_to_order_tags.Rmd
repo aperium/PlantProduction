@@ -15,7 +15,7 @@ output:
   - tomato is 1 ppp -> 1 tag pp
 - [ ] subtract tags ordered from tags needed
   - [X] read-in MasterTag orders list
-  - [ ] join to plant orders table with some name alignemtn function, probably using fuzzyjoin. Consider Biostrings::pairwiseAlignment()
+  - [ ] join to plant orders table with some name alignemtn function, probably using fuzzyjoin. Consider Biostrings::pairwiseAlignment(). Also consider the msa package in Bioconductor
   - [ ] subtract from need_to_order
 - [x] combine multiple history files from ball so I don't have to download the whole thing every time. use dplyr::upsert()
 
@@ -23,9 +23,9 @@ output:
 ```{r setup, echo=FALSE, error=TRUE, message=TRUE, warning=TRUE, include=FALSE}
 # this block loads required packages and some custom functions. 
 
-cran_pacs <- c("rlang", "pkgbuild","pak","librarian","rmarkdown", "BiocManager", "tidyselect", "tidyverse", "magrittr", "stats", "measurements", "knitr", "foreach", "doParallel", "parallel", "fs", "janitor", "stringr", "readxl", "writexl","fuzzyjoin", "chromote", "pdftools", "reticulate", "lubridate", "readr", "tidyr", "forcats", "purrr", "stringdist") |> unique() # "rvest", "polite", "XML", "tabulizer", "gt"
+cran_pacs <- c("rlang", "pkgbuild","librarian", "pak", "rmarkdown", "tidyselect", "tidyverse", "magrittr", "stats", "measurements", "knitr", "foreach", "doParallel", "parallel", "fs", "janitor", "stringr", "readxl", "writexl","fuzzyjoin", "chromote", "pdftools", "lubridate", "readr", "tidyr", "forcats", "purrr", "stringdist") |> unique() # "rvest", "polite", "XML", "tabulizer", "gt"
 dev_pacs <- c() ## "aperium/rutil")
-bioc_pacs <- c("Biostrings")
+bioc_pacs <- c("Biostrings","msa")
 py_pacs <- c("camelot-py")
 
 ## function to quietly find list of packages
@@ -39,32 +39,30 @@ if (length(cran_pacs) > 0) install_as_needed(cran_pacs,install.packages)
 
 # install github dev packs
 if (length(dev_pacs)>0) {
-  if (!require("pak", quietly = TRUE)) install.packages("pak")
+  if (!requireNamespace("pak", quietly = TRUE)) install.packages("pak")
   install_as_needed(dev_pacs,pak::pak, ask = FALSE, upgrade = TRUE)
 }
 
 # install bioc packs
 if (length(bioc_pacs)>0) {
-  if (!require("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+  if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
   # install_as_needed(c("DBI","xfun"))
   BiocManager::install(version = "3.18", update = TRUE, ask=FALSE)
   install_as_needed(bioc_pacs,BiocManager::install, update = TRUE, ask=FALSE)
 }
 
-
+if (!requireNamespace("librarian", quietly = TRUE)) install.packages("librarian")
+if (!requireNamespace("pak", quietly = TRUE)) install.packages("pak")
 librarian::shelf(cran_pacs, bioc_pacs, dev_pacs, quiet = TRUE)
 installed_req_pkgs <- pak::pkg_status(c(cran_pacs, bioc_pacs, dev_pacs))$package
 loaded_pacs <- search() |> stringr::str_extract("(?<=:).*$") |> na.omit()
 
 
 # install python packs
-if (("reticulate" %in% loaded_pacs) & !reticulate::py_available(initialize = TRUE)) install_python()
-if (py_available(initialize = TRUE) & (length(py_pacs)>0)) {
-  # py_exe()
-  # py_list_packages()$package
-  py_install(py_pacs)
-  # py_list_packages_names <- function(...) py_list_packages(...)$package
-  # install_as_needed(py_pacs, py_install, py_list_packages_names)
+if (length(py_pacs)>0) {
+  if (!requireNamespace("reticulate", quietly = TRUE)) install.packages("reticulate")
+  if (!reticulate::py_available(initialize = TRUE)) reticulate::install_python()
+  if (reticulate::py_available(initialize = TRUE)) reticulate::py_install(py_pacs)
 }
 
 # 
@@ -256,7 +254,7 @@ joined <- full_join(e_combined, b_orders, by=alignment) %>%
 
 ```{r filter}
 filtered <- joined |>
-  filter(`Ship Date` >= "20231201" |> ymd(),
+  dplyr::filter(`Ship Date` >= "20231201" |> ymd(),
          Supplier |> str_equal("Kube Pak"),
          (Description |> str_detect("(^|[:space:])(HE)|(VF)[:space:]"))|(`Customer PO #` |> str_to_lower() |> str_detect("(herb)|(veg)")))
 
