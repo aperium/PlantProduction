@@ -126,11 +126,16 @@ ship_year <- today() |> year() |> as.character()
 
 
 
-dir_path <- "C:/Users/danielw/Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstreet/Production Finished/QVC Spring 2024 Drop Ship/Sales Reports" |> path_home()
+dir_path <- "Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstreet/Production Finished/QVC Spring 2024 Drop Ship/Sales Reports" |> path_home()
 
-inventory_on_hand <- dir_path |> path("GM36_sku_inventory_2024-03-18.csv")
-sales_by_daterange <- dir_path |> path("GM36_sku_sales_2024-03-14_through_2024-03-18.csv")
-
-
+inventory_on_hand_path <- dir_path |> path("GM36_sku_inventory_2024-03-18.csv")
+sales_by_daterange_path <- dir_path |> path("GM36_sku_sales_2024-03-14_through_2024-03-18.csv")
 
 ```
+
+```{r datasetup, echo=TRUE, error=TRUE, message=FALSE, warning=TRUE}
+inventory_on_hand <- inventory_on_hand_path |> read_csv()
+
+sales_by_daterange <- sales_by_daterange_path |> read_csv()
+```
+
