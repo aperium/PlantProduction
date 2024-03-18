@@ -137,5 +137,17 @@ sales_by_daterange_path <- dir_path |> path("GM36_sku_sales_2024-03-14_through_2
 inventory_on_hand <- inventory_on_hand_path |> read_csv()
 
 sales_by_daterange <- sales_by_daterange_path |> read_csv()
+
+#joining 
+inventry_and_sales <- left_join(sales_by_daterange, inventory_on_hand) |>
+  janitor::remove_empty() |>
+  janitor::remove_constant() |>
+  dplyr::relocate(matches("^SKN_"),matches("_QUANTITY$"),matches("_AMOUNT$"))
 ```
 
+```{r export}
+
+inventry_and_sales |>
+  write_xlsx_flex(dir_path |> path(paste(sep = "_","QVC_AF_inventory_and_sales",today(),".xlsx")))
+
+```
