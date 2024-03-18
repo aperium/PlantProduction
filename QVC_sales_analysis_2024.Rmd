@@ -142,7 +142,8 @@ sales_by_daterange <- sales_by_daterange_path |> read_csv()
 inventry_and_sales <- left_join(sales_by_daterange, inventory_on_hand) |>
   janitor::remove_empty() |>
   janitor::remove_constant() |>
-  dplyr::relocate(matches("^SKN_"),matches("_QUANTITY$"),matches("_AMOUNT$"))
+  dplyr::relocate(matches("^SKN_"),matches("_QUANTITY$"),matches("_AMOUNT$")) |>
+  dplyr::select(!matches("^OK_"))
 ```
 
 ```{r export}
