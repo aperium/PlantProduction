@@ -24,6 +24,9 @@ dev_pacs <- c() ## "aperium/rutil")
 bioc_pacs <- c("Biostrings")
 py_pacs <- c("camelot-py")
 
+# global option to stop prompting for installing from source.
+options(install.packages.check.source = "no")
+
 ## function to quietly find list of packages
 find_package_quiet <- function(pkgs, ...) unlist(find.package(pkgs, quiet = TRUE, ...))
 install_as_needed <- function(pacs, inst_fun = install.packages, check_fun = find_package_quiet, ...) {
@@ -31,24 +34,24 @@ install_as_needed <- function(pacs, inst_fun = install.packages, check_fun = fin
 }
 
 # install cran packs
-if (length(cran_pacs) > 0) install_as_needed(cran_pacs,install.packages)
+if (length(cran_pacs) > 0) install_as_needed(cran_pacs,install.packages, quiet = TRUE)
 
 # install github dev packs
 if (length(dev_pacs)>0) {
-  if (!requireNamespace("pak", quietly = TRUE)) install.packages("pak")
+  if (!requireNamespace("pak", quietly = TRUE)[]) install.packages("pak", quiet = TRUE)
   install_as_needed(dev_pacs,pak::pak, ask = FALSE, upgrade = TRUE)
 }
 
 # install bioc packs
 if (length(bioc_pacs)>0) {
-  if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+  if (!requireNamespace("BiocManager", quietly = TRUE)[]) install.packages("BiocManager", quiet = TRUE)
   # install_as_needed(c("DBI","xfun"))
   BiocManager::install(version = "3.18", update = TRUE, ask=FALSE)
   install_as_needed(bioc_pacs,BiocManager::install, update = TRUE, ask=FALSE)
 }
 
-if (!requireNamespace("librarian", quietly = TRUE)) install.packages("librarian")
-if (!requireNamespace("pak", quietly = TRUE)) install.packages("pak")
+if (!requireNamespace("librarian", quietly = TRUE)[]) install.packages("librarian", quiet = TRUE)
+if (!requireNamespace("pak", quietly = TRUE)[]) install.packages("pak", quiet = TRUE)
 librarian::shelf(cran_pacs, bioc_pacs, dev_pacs, quiet = TRUE)
 installed_req_pkgs <- pak::pkg_status(c(cran_pacs, bioc_pacs, dev_pacs))$package
 loaded_pacs <- search() |> stringr::str_extract("(?<=:).*$") |> na.omit()
@@ -56,7 +59,7 @@ loaded_pacs <- search() |> stringr::str_extract("(?<=:).*$") |> na.omit()
 
 # install python packs
 if (length(py_pacs)>0) {
-  if (!requireNamespace("reticulate", quietly = TRUE)) install.packages("reticulate")
+  if (!requireNamespace("reticulate", quietly = TRUE)[]) install.packages("reticulate", quiet = TRUE)
   if (!reticulate::py_available(initialize = TRUE)) reticulate::install_python()
   if (reticulate::py_available(initialize = TRUE)) reticulate::py_install(py_pacs)
 }
