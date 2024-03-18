@@ -35,34 +35,31 @@ if (length(cran_pacs) > 0) install_as_needed(cran_pacs,install.packages)
 
 # install github dev packs
 if (length(dev_pacs)>0) {
-  if (!require("pak", quietly = TRUE)) install.packages("pak")
+  if (!requireNamespace("pak", quietly = TRUE)) install.packages("pak")
   install_as_needed(dev_pacs,pak::pak, ask = FALSE, upgrade = TRUE)
 }
 
 # install bioc packs
 if (length(bioc_pacs)>0) {
-  if (!require("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+  if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
   # install_as_needed(c("DBI","xfun"))
-  BiocManager::install(version = "3.18", update = FALSE, ask=FALSE)
-  install_as_needed(bioc_pacs,BiocManager::install)
+  BiocManager::install(version = "3.18", update = TRUE, ask=FALSE)
+  install_as_needed(bioc_pacs,BiocManager::install, update = TRUE, ask=FALSE)
 }
 
-
+if (!requireNamespace("librarian", quietly = TRUE)) install.packages("librarian")
+if (!requireNamespace("pak", quietly = TRUE)) install.packages("pak")
 librarian::shelf(cran_pacs, bioc_pacs, dev_pacs, quiet = TRUE)
 installed_req_pkgs <- pak::pkg_status(c(cran_pacs, bioc_pacs, dev_pacs))$package
-loaded_pacs <- search() |> str_extract("(?<=:).*$") |> na.omit()
+loaded_pacs <- search() |> stringr::str_extract("(?<=:).*$") |> na.omit()
 
 
 # install python packs
-if (("reticulate" %in% loaded_pacs) & !py_available(initialize = TRUE)) install_python()
-if (py_available(initialize = TRUE) & (length(py_pacs)>0)) {
-  # py_exe()
-  # py_list_packages()$package
-  py_install(py_pacs)
-  # py_list_packages_names <- function(...) py_list_packages(...)$package
-  # install_as_needed(py_pacs, py_install, py_list_packages_names)
+if (length(py_pacs)>0) {
+  if (!requireNamespace("reticulate", quietly = TRUE)) install.packages("reticulate")
+  if (!reticulate::py_available(initialize = TRUE)) reticulate::install_python()
+  if (reticulate::py_available(initialize = TRUE)) reticulate::py_install(py_pacs)
 }
-
 
 
 if((("readxl" %in% installed_req_pkgs)&is_empty(find_package_quiet("readxl")))|(("writexl" %in% installed_req_pkgs)&is_empty(find_package_quiet("writexl")))) librarian::shelf("ycphs/openxlsx") #load openxlsx if read-/write-xl not avail
