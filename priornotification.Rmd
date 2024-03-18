@@ -10,7 +10,7 @@ output:
 
 # Todo
 
-- [ ] Bug with merging the treatments table. Looks like a full join rather than picking the most recent treatment.
+- [x] Bug with merging the treatments table. Looks like a full join rather than picking the most recent treatment.
 - [ ] if chromate fails, retry?
 - [x] If the there are blanks in the address fields, fill them all in with google search.
 
