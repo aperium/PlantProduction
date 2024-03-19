@@ -211,7 +211,8 @@ mtag_orders <- foreach::foreach(i=order(mtag_files), .combine = \(x,y) dplyr::ro
     dplyr::distinct()
   } |> janitor::remove_empty() |>
     dplyr::mutate(vendor = "MasterTag",
-                  "Estimated Ship Date" = `Estimated Ship Date` |> mdy())
+                  "Estimated Ship Date" = `Estimated Ship Date` |> mdy(),
+                  "MT Item Description" = `MT Item Description` |> str_remove_all("[:punct:]|®|™") |> str_squish())
 
 
 # old mtag import method
