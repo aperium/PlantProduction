@@ -297,31 +297,48 @@ stopImplicitCluster()
 # apply(scores, 1, max) |> quantile(.1)
 
 p_loc <- apply(scores, 2, which.max)
-plant_names[p_loc]
+# plant_names[p_loc]
 
 t_loc <- apply(scores, 1, which.max)
-tag_names[t_loc]
+# tag_names[t_loc]
 
 
-plant_boolmat <- foreach(i=1:length(plant_names), .combine = rbind) %do% {
-  foreach(j=1:length(tag_names)) %do% {
-    plant_names[p_loc[j]] == plant_names[i]
-  } |> unlist()
-} |> unlist()
+plant_boolmat <- matrix(nrow = length(plant_names), ncol = length(tag_names))
+foreach(i=1:length(plant_names), .combine = \(...){}) %do% {
+  foreach(j=1:length(tag_names), .combine = \(...){}) %do% {
+    plant_boolmat[i,j] <- plant_names[p_loc[j]] == plant_names[i]
+  }
+}
 
-tag_boolmat <- foreach(j=1:length(plant_names), .combine = rbind) %do% {
-  foreach(i=1:length(tag_names)) %do% {
-    tag_names[t_loc[j]] == tag_names[i]
-  } |> unlist()
-} |> unlist()
+tag_boolmat <- matrix(nrow = length(plant_names), ncol = length(tag_names))
+foreach(i=1:length(plant_names), .combine = \(...){}) %do% {
+  foreach(j=1:length(tag_names), .combine = \(...){}) %do% {
+    plant_boolmat[i,j] <- tag_names[t_loc[i]] == tag_names[j]
+  }
+}
+
+# plant_boolmat <- foreach(i=1:length(plant_names), .combine = rbind) %do% {
+#   foreach(j=1:length(tag_names)) %do% {
+#    plant_names[p_loc[j]] == plant_names[i]
+#   } |> unlist()
+# } |> unlist()
+
+# tag_boolmat <- foreach(i=1:length(plant_names), .combine = rbind) %do% {
+#   foreach(j=1:length(tag_names)) %do% {
+#     tag_names[t_loc[i]] == tag_names[j]
+#   } |> unlist()
+# } |> unlist()
 
 both_boolmat <- plant_boolmat & tag_boolmat
 
+tag_names[apply(both_boolmat, 1, which, useNames=FALSE) |> unlist()] |> cbind(plant_names)
 
+plant_names[apply(both_boolmat, 2, which, useNames=FALSE) |> unlist()] |> cbind(tag_names)
+
+
+foreach(i=1:length(plant_names)) %do% tag_names[unlist(apply(both_boolmat, 1, which))[i]] |> unlist() |> cbind(plant_names)
 
 # foreach(i=1:length(plant_names)) %do% tag_names[apply(scores, 1, which.max)[i]] |> unlist() |> cbind(plant_names)
-
-
 
 # can i use dplyr::join with dplyr::closest() with pairwiseAligment scores? or maybe need to use fuzzyjoin
 
