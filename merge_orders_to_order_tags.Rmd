@@ -304,18 +304,23 @@ t_loc <- apply(scores, 1, which.max)
 
 
 plant_boolmat <- matrix(nrow = length(plant_names), ncol = length(tag_names))
-foreach(i=1:length(plant_names), .combine = \(...){}) %do% {
-  foreach(j=1:length(tag_names), .combine = \(...){}) %do% {
-    plant_boolmat[i,j] <- plant_names[p_loc[j]] == plant_names[i]
-  }
-}
-
 tag_boolmat <- matrix(nrow = length(plant_names), ncol = length(tag_names))
-foreach(i=1:length(plant_names), .combine = \(...){}) %do% {
-  foreach(j=1:length(tag_names), .combine = \(...){}) %do% {
-    plant_boolmat[i,j] <- tag_names[t_loc[i]] == tag_names[j]
+foreach(i=1:length(plant_names), .combine = \(...){NULL}) %do% {
+  foreach(j=1:length(tag_names), .combine = \(...){NULL}) %do% {
+    plant_boolmat[p_loc[j],j] <- plant_names[p_loc[j]] == plant_names[i]
+    tag_boolmat[i,t_loc[i]] <- tag_names[t_loc[i]] == tag_names[j]
   }
 }
+plant_boolmat |> as.integer() |> sum()
+tag_boolmat |> as.integer() |> sum()
+
+# tag_boolmat <- matrix(nrow = length(plant_names), ncol = length(tag_names))
+# foreach(i=1:length(plant_names), .combine = \(...){}) %do% {
+#   foreach(j=1:length(tag_names), .combine = \(...){}) %do% {
+#     tag_boolmat[i,j] <- tag_names[t_loc[i]] == tag_names[j]
+#   }
+# }
+# tag_boolmat |> as.integer() |> sum()
 
 # plant_boolmat <- foreach(i=1:length(plant_names), .combine = rbind) %do% {
 #   foreach(j=1:length(tag_names)) %do% {
@@ -330,6 +335,7 @@ foreach(i=1:length(plant_names), .combine = \(...){}) %do% {
 # } |> unlist()
 
 both_boolmat <- plant_boolmat & tag_boolmat
+both_boolmat |> as.integer() |> sum()
 
 tag_names[apply(both_boolmat, 1, which, useNames=FALSE) |> unlist()] |> cbind(plant_names)
 
