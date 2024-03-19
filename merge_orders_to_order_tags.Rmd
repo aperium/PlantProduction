@@ -261,9 +261,12 @@ joined <- full_join(e_combined, b_orders, by=alignment) %>%
 
 ```{r filter}
 filtered <- joined |>
-  dplyr::filter(`Ship Date` >= "20231201" |> ymd(),
+  dplyr::filter(`Ship Date` > "20231201" |> ymd(),
          Supplier |> str_equal("Kube Pak"),
          (Description |> str_detect("(^|[:space:])(HE)|(VF)[:space:]"))|(`Customer PO #` |> str_to_lower() |> str_detect("(herb)|(veg)")))
+
+tags_filtered <- mtag_orders |>
+  dplyr::filter(`Estimated Ship Date` > "20231201" |> ymd())
 
 ```
 
@@ -276,6 +279,7 @@ aligned <- fuzzyjoin::fuzzy_full_join(filtered, mtag_orders, by=c("Description"=
 
 tag_names <- mtag_orders$`MT Item Description` |> unique()
 plant_names <- filtered$Description |> unique()
+
 pairwiseAlightmentMatch(tag_names, plant_names[1])
 
 registerDoParallel(cores=n_cores*2/3)
@@ -283,6 +287,11 @@ scores <- foreach(i=1:length(plant_names), .combine = rbind, .export = c("tag_na
   Biostrings::pairwiseAlignment(tag_names, plant_names[i],scoreOnly = TRUE)
   } |> unlist()
 stopImplicitCluster()
+
+apply(scores, 1, which.max)
+
+foreach(i=1:length(plant_names)) %do% tag_names[apply(scores, 1, which.max)[i]] |> unlist() |> cbind(plant_names)
+
 
 
 # can i use dplyr::join with dplyr::closest() with pairwiseAligment scores? or maybe need to use fuzzyjoin
