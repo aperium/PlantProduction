@@ -270,9 +270,14 @@ filtered <- joined |>
 ```{r mtag_join}
 
 # Biostrings::pairwiseAlignment()
-# pairwiseAlightmentMatch()
+# 
 
 aligned <- fuzzyjoin::fuzzy_full_join(filtered, mtag_orders, by=c("Description"="MT Item Description"), match_fun = pairwiseAlightmentMatch)
+
+tag_names <- mtag_orders$`MT Item Description` |> unique()
+plant_names <- filtered$Description |> unique()
+pairwiseAlightmentMatch(tag_names, plant_names[1])
+Biostrings::pairwiseAlignment(tag_names, plant_names[1],scoreOnly = TRUE) |> max()
 
 
 # can i use dplyr::join with dplyr::closest() with pairwiseAligment scores? or maybe need to use fuzzyjoin
