@@ -260,6 +260,9 @@ joined <- full_join(e_combined, b_orders, by=alignment) %>%
 ```
 
 ```{r filter}
+## TODO  this is super slow. Might be a good thing to try multidplyr
+## https://cran.r-project.org/web/packages/multidplyr/vignettes/multidplyr.html#:~:text=multidplyr%20is%20a%20backend%20for,transparently%20support%20multi%2Dprocess%20parallelism.
+
 filtered <- joined |>
   dplyr::filter((`Ship Date` >= "20240101" |> ymd())&(`Ship Date` < "20240701" |> ymd()),
                 Supplier |> str_equal("Kube Pak"),
