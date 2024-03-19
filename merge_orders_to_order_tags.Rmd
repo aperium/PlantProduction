@@ -261,12 +261,13 @@ joined <- full_join(e_combined, b_orders, by=alignment) %>%
 
 ```{r filter}
 filtered <- joined |>
-  dplyr::filter(`Ship Date` > "20231201" |> ymd(),
-         Supplier |> str_equal("Kube Pak"),
-         (Description |> str_detect("(^|[:space:])(HE)|(VF)[:space:]"))|(`Customer PO #` |> str_to_lower() |> str_detect("(herb)|(veg)")))
+  dplyr::filter((`Ship Date` >= "20240101" |> ymd())&(`Ship Date` < "20240701" |> ymd()),
+                Supplier |> str_equal("Kube Pak"),
+                (Description |> str_detect("(^|[:space:])(HE)|(VF)[:space:]"))|(`Customer PO #` |> str_to_lower() |> str_detect("(herb)|(veg)"))) |>
+  dplyr::mutate(Description = Description |> str_remove_all("(?<=([:space:]|^))((herb)|(he)|(vf))(?=([:space:]|$))") |> str_squish())
 
 tags_filtered <- mtag_orders |>
-  dplyr::filter(`Estimated Ship Date` > "20231201" |> ymd())
+  dplyr::filter((`Estimated Ship Date` >= "20240101" |> ymd())&(`Estimated Ship Date` < "20240701" |> ymd()))
 
 ```
 
@@ -275,22 +276,50 @@ tags_filtered <- mtag_orders |>
 # Biostrings::pairwiseAlignment()
 # 
 
-aligned <- fuzzyjoin::fuzzy_full_join(filtered, mtag_orders, by=c("Description"="MT Item Description"), match_fun = pairwiseAlightmentMatch)
+# aligned <- fuzzyjoin::fuzzy_full_join(filtered, mtag_orders, by=c("Description"="MT Item Description"), match_fun = pairwiseAlightmentMatch)
 
 tag_names <- mtag_orders$`MT Item Description` |> unique()
 plant_names <- filtered$Description |> unique()
 
-pairwiseAlightmentMatch(tag_names, plant_names[1])
+# pairwiseAlightmentMatch(tag_names, plant_names[1])
 
 registerDoParallel(cores=n_cores*2/3)
-scores <- foreach(i=1:length(plant_names), .combine = rbind, .export = c("tag_names","plant_names")) %dopar% {
+scores <- foreach(i=1:length(plant_names), .combine = rbind, .export = c("plant_names","tag_names")) %dopar% {
   Biostrings::pairwiseAlignment(tag_names, plant_names[i],scoreOnly = TRUE)
   } |> unlist()
 stopImplicitCluster()
 
-apply(scores, 1, which.max)
+# mean(scores)
+# median(scores)
+# apply(scores, 2, max) |> mean()
+# apply(scores, 1, max) |> mean()
+# apply(scores, 2, max) |> quantile(.1)
+# apply(scores, 1, max) |> quantile(.1)
 
-foreach(i=1:length(plant_names)) %do% tag_names[apply(scores, 1, which.max)[i]] |> unlist() |> cbind(plant_names)
+p_loc <- apply(scores, 2, which.max)
+plant_names[p_loc]
+
+t_loc <- apply(scores, 1, which.max)
+tag_names[t_loc]
+
+
+plant_boolmat <- foreach(i=1:length(plant_names), .combine = rbind) %do% {
+  foreach(j=1:length(tag_names)) %do% {
+    plant_names[p_loc[j]] == plant_names[i]
+  } |> unlist()
+} |> unlist()
+
+tag_boolmat <- foreach(j=1:length(plant_names), .combine = rbind) %do% {
+  foreach(i=1:length(tag_names)) %do% {
+    tag_names[t_loc[j]] == tag_names[i]
+  } |> unlist()
+} |> unlist()
+
+both_boolmat <- plant_boolmat & tag_boolmat
+
+
+
+# foreach(i=1:length(plant_names)) %do% tag_names[apply(scores, 1, which.max)[i]] |> unlist() |> cbind(plant_names)
 
 
 
