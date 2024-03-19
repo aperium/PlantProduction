@@ -255,7 +255,7 @@ alignment <- c("vendor" = "vendor", "Order #" = "Order Number","Customer PO #" =
 joined <- full_join(e_combined, b_orders, by=alignment) %>%
   select(names(alignment)) |>
   rowwise() |>
-  mutate(Description = Description |> str_to_lower() |> str_extract_all("([:alpha:]{2,})|([:digit:]*(\\.[:digit:]+)(?!C$))", simplify = TRUE) |> unique() |> as.character() |> str_flatten(collapse = " "))
+  mutate(Description = Description |> str_to_lower() |> str_extract_all("([:alpha:]{2,})|([:digit:]*(\\.[:digit:]+)(?!C$))", simplify = TRUE) |> str_squish() |> unique() |> as.character() |> str_flatten(collapse = " "))
 
 ```
 
@@ -277,7 +277,12 @@ aligned <- fuzzyjoin::fuzzy_full_join(filtered, mtag_orders, by=c("Description"=
 tag_names <- mtag_orders$`MT Item Description` |> unique()
 plant_names <- filtered$Description |> unique()
 pairwiseAlightmentMatch(tag_names, plant_names[1])
-Biostrings::pairwiseAlignment(tag_names, plant_names[1],scoreOnly = TRUE) |> max()
+
+registerDoParallel(cores=n_cores*2/3)
+scores <- foreach(i=1:length(plant_names), .combine = rbind, .export = c("tag_names","plant_names")) %dopar% {
+  Biostrings::pairwiseAlignment(tag_names, plant_names[i],scoreOnly = TRUE)
+  } |> unlist()
+stopImplicitCluster()
 
 
 # can i use dplyr::join with dplyr::closest() with pairwiseAligment scores? or maybe need to use fuzzyjoin
