@@ -23,7 +23,7 @@ output:
 ```{r setup, echo=FALSE, error=TRUE, message=TRUE, warning=TRUE, include=FALSE}
 # this block loads required packages and some custom functions. 
 
-cran_pacs <- c("rlang", "pkgbuild","librarian", "pak", "rmarkdown", "tidyselect", "tidyverse", "magrittr", "stats", "measurements", "knitr", "foreach", "doParallel", "parallel", "fs", "janitor", "stringr", "readxl", "writexl","fuzzyjoin", "chromote", "pdftools", "lubridate", "readr", "tidyr", "forcats", "purrr", "stringdist") |> unique() # "rvest", "polite", "XML", "tabulizer", "gt"
+cran_pacs <- c("rlang", "pkgbuild","librarian", "pak", "rmarkdown", "tidyselect", "tidyverse", "magrittr", "stats", "measurements", "knitr", "foreach", "doParallel", "parallel", "fs", "janitor", "stringr", "readxl", "writexl","fuzzyjoin", "chromote", "pdftools", "lubridate", "readr", "tidyr", "forcats", "purrr", "stringdist", "bigmemory", "multidplyr") |> unique() # "rvest", "polite", "XML", "tabulizer", "gt"
 dev_pacs <- c() ## "aperium/rutil")
 bioc_pacs <- c("Biostrings") #,"msa")
 py_pacs <- c("camelot-py")
@@ -262,12 +262,18 @@ joined <- full_join(e_combined, b_orders, by=alignment) %>%
 ```{r filter}
 ## TODO  this is super slow. Might be a good thing to try multidplyr
 ## https://cran.r-project.org/web/packages/multidplyr/vignettes/multidplyr.html#:~:text=multidplyr%20is%20a%20backend%20for,transparently%20support%20multi%2Dprocess%20parallelism.
+cluster <- new_cluster(n_cores-1)
+cluster_library(cluster, installed_req_pkgs)
 
 filtered <- joined |>
+  partition(cluster) |>
   dplyr::filter((`Ship Date` >= "20240101" |> ymd())&(`Ship Date` < "20240701" |> ymd()),
                 Supplier |> str_equal("Kube Pak"),
                 (Description |> str_detect("(^|[:space:])(HE)|(VF)[:space:]"))|(`Customer PO #` |> str_to_lower() |> str_detect("(herb)|(veg)"))) |>
+  collect() |>
   dplyr::mutate(Description = Description |> str_remove_all("(?<=([:space:]|^))((herb)|(he)|(vf))(?=([:space:]|$))") |> str_squish())
+
+cluster_rm(cluster)
 
 tags_filtered <- mtag_orders |>
   dplyr::filter((`Estimated Ship Date` >= "20240101" |> ymd())&(`Estimated Ship Date` < "20240701" |> ymd()))
@@ -306,16 +312,16 @@ t_loc <- apply(scores, 1, which.max)
 # tag_names[t_loc]
 
 
-plant_boolmat <- matrix(nrow = length(plant_names), ncol = length(tag_names))
-tag_boolmat <- matrix(nrow = length(plant_names), ncol = length(tag_names))
+plant_boolmat <- big.matrix(nrow = length(plant_names), ncol = length(tag_names))
+tag_boolmat <- big.matrix(nrow = length(plant_names), ncol = length(tag_names))
 foreach(i=1:length(plant_names), .combine = \(...){NULL}) %do% {
   foreach(j=1:length(tag_names), .combine = \(...){NULL}) %do% {
     plant_boolmat[p_loc[j],j] <- plant_names[p_loc[j]] == plant_names[i]
     tag_boolmat[i,t_loc[i]] <- tag_names[t_loc[i]] == tag_names[j]
   }
 }
-plant_boolmat |> as.integer() |> sum()
-tag_boolmat |> as.integer() |> sum()
+# plant_boolmat |> as.integer() |> sum()
+# tag_boolmat |> as.integer() |> sum()
 
 # tag_boolmat <- matrix(nrow = length(plant_names), ncol = length(tag_names))
 # foreach(i=1:length(plant_names), .combine = \(...){}) %do% {
