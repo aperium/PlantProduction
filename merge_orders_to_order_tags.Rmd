@@ -289,6 +289,10 @@ tags_filtered <- mtag_orders |>
 tag_names <- mtag_orders$`MT Item Description` |> unique()
 plant_names <- filtered$Description |> unique()
 
+intersect_names <- intersect(tag_names, plant_names)
+tag_names <- setdiff(tag_names,intersect_names)
+plant_names <- setdiff(plant_names,intersect_names)
+
 # pairwiseAlightmentMatch(tag_names, plant_names[1])
 
 registerDoParallel(cores=n_cores*3/4)
@@ -348,10 +352,24 @@ joined_index = inner_join(tag_plant_index |> as_tibble(),plant_tag_index |> as_t
 mapply(\(x,y) {str_equal(x,y, ignore_case = TRUE)|str_equal(joined_index$plantname[match(x, joined_index$tagname)] ,y, ignore_case = TRUE)},mtag_orders$`MT Item Description`, mtag_orders$`MT Item Description`)
 
 name_match <- function(x,y) {
+
   x_u <- x |> unique()
   y_u <- y |> unique()
+  
+  # xy_intersect <- generics::intersect(x_u, y_u)
+  xy_setdiff <- generics::setdiff(x_u, y_u)
+  
+  if(length(xy_setdiff) == 0) {
+    out1 <- mapply(\(m,n) {str_equal(m,n,ignore_case = TRUE)},x,y)
+    return(out1)
+  }
+  
+  # x_u <- generics::setdiff(x_u,xy_intersect)
+  # y_u <- generics::setdiff(y_u,xy_intersect)
+  x_u <- generics::intersect(x_u,xy_setdiff)
+  y_u <- generics::intersect(y_u,xy_setdiff)
 
-  registerDoParallel(cores=n_cores*3/4)
+  registerDoParallel(cores=n_cores*2/3)
   scores <- foreach(i=1:length(y_u), .combine = rbind) %dopar% {
     Biostrings::pairwiseAlignment(x_u, y_u[i],scoreOnly = TRUE)
     } |> unlist()
@@ -377,10 +395,11 @@ name_match <- function(x,y) {
            # lmin = pmin(str_length(yname),str_length(xname)),
            score_adj = -(lmax)/score)
 
-  mapply(\(m,n) {str_equal(m,n,ignore_case = TRUE)|str_equal(joined_index$yname[match(m,joined_index$xname)],n,ignore_case = TRUE)},x,y)
+  out2 <- mapply(\(m,n) {str_equal(m,n,ignore_case = TRUE)|str_equal(joined_index$yname[match(m,joined_index$xname)],n,ignore_case = TRUE)},x,y)
+  return(out2)
 }
 
-name_match(mtag_orders$`MT Item Description`, mtag_orders$`MT Item Description`)
+testout <- name_match(mtag_orders$`MT Item Description`, filtered$Description)
 
 # Next TODO: compare the input lists to the lookup table to return boolian lists compatible with fuzzyjoin(match_fun)
 
