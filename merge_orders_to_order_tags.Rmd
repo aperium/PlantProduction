@@ -347,7 +347,40 @@ joined_index = inner_join(tag_plant_index |> as_tibble(),plant_tag_index |> as_t
 
 mapply(\(x,y) {str_equal(x,y, ignore_case = TRUE)|str_equal(joined_index$plantname[match(x, joined_index$tagname)] ,y, ignore_case = TRUE)},mtag_orders$`MT Item Description`, mtag_orders$`MT Item Description`)
 
+name_match <- function(x,y) {
+  x_u <- x |> unique()
+  y_u <- y |> unique()
 
+  registerDoParallel(cores=n_cores*3/4)
+  scores <- foreach(i=1:length(y_u), .combine = rbind) %dopar% {
+    Biostrings::pairwiseAlignment(x_u, y_u[i],scoreOnly = TRUE)
+    } |> unlist()
+  stopImplicitCluster()
+
+  y_loc <- apply(scores, 2, which.max) |> unname() |> as.integer()
+
+  x_loc <- apply(scores, 1, which.max) |> unname() |> as.integer()
+
+  x_y_index <- foreach(j=1:length(x_loc), .combine = rbind) %do% {
+    c(xname = x_u[x_loc[j]], yname = y_u[j], xi = x_loc[j] |> as.integer(), yi = j |> as.integer())
+  }
+
+  y_x_index <- foreach(i=1:length(y_loc), .combine = rbind) %do% {
+    c(yname = y_u[y_loc[i]], xname = x_u[i], yi = y_loc[i] |> as.integer(), xi = i |> as.integer())
+  }
+
+  joined_index = inner_join(x_y_index |> as_tibble(),y_x_index |> as_tibble()) |>
+    mutate(yi = yi |> as.integer(),
+           xi = xi |> as.integer(),
+           score = scores[yi*xi],
+           lmax = pmax(str_length(yname),str_length(xname)),
+           # lmin = pmin(str_length(yname),str_length(xname)),
+           score_adj = -(lmax)/score)
+
+  mapply(\(m,n) {str_equal(m,n,ignore_case = TRUE)|str_equal(joined_index$yname[match(m,joined_index$xname)],n,ignore_case = TRUE)},x,y)
+}
+
+name_match(mtag_orders$`MT Item Description`, mtag_orders$`MT Item Description`)
 
 # Next TODO: compare the input lists to the lookup table to return boolian lists compatible with fuzzyjoin(match_fun)
 
