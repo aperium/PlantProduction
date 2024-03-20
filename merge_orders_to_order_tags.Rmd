@@ -343,7 +343,8 @@ joined_index = inner_join(tag_plant_index |> as_tibble(),plant_tag_index |> as_t
          # score_adj4 = -(lmax*lmin)/score,
          # score_adj5 = -(lmax+lmin)/score,
          score_adj = -(lmax)/score)
-  # mutate(coords = paste(sep = ",",planti,tagi))
+
+# Next TODO: compare the input lists to the lookup table to return boolian lists compatible with fuzzyjoin(match_fun)
 
 
 
@@ -369,16 +370,16 @@ joined_index = inner_join(tag_plant_index |> as_tibble(),plant_tag_index |> as_t
 #     tag_names[t_loc[i]] == tag_names[j]
 #   } |> unlist()
 # } |> unlist()
-
-both_boolmat <- plant_boolmat & tag_boolmat
-both_boolmat |> as.integer() |> sum()
-
-tag_names[apply(both_boolmat, 1, which, useNames=FALSE) |> unlist()] |> cbind(plant_names)
-
-plant_names[apply(both_boolmat, 2, which, useNames=FALSE) |> unlist()] |> cbind(tag_names)
-
-
-foreach(i=1:length(plant_names)) %do% tag_names[unlist(apply(both_boolmat, 1, which))[i]] |> unlist() |> cbind(plant_names)
+# 
+# both_boolmat <- plant_boolmat & tag_boolmat
+# both_boolmat |> as.integer() |> sum()
+# 
+# tag_names[apply(both_boolmat, 1, which, useNames=FALSE) |> unlist()] |> cbind(plant_names)
+# 
+# plant_names[apply(both_boolmat, 2, which, useNames=FALSE) |> unlist()] |> cbind(tag_names)
+# 
+# 
+# foreach(i=1:length(plant_names)) %do% tag_names[unlist(apply(both_boolmat, 1, which))[i]] |> unlist() |> cbind(plant_names)
 
 # foreach(i=1:length(plant_names)) %do% tag_names[apply(scores, 1, which.max)[i]] |> unlist() |> cbind(plant_names)
 
