@@ -291,7 +291,7 @@ plant_names <- filtered$Description |> unique()
 
 # pairwiseAlightmentMatch(tag_names, plant_names[1])
 
-registerDoParallel(cores=n_cores*2/3)
+registerDoParallel(cores=n_cores*3/4)
 scores <- foreach(i=1:length(plant_names), .combine = rbind, .export = c("plant_names","tag_names")) %dopar% {
   Biostrings::pairwiseAlignment(tag_names, plant_names[i],scoreOnly = TRUE)
   } |> unlist()
@@ -304,23 +304,40 @@ stopImplicitCluster()
 # apply(scores, 2, max) |> quantile(.1)
 # apply(scores, 1, max) |> quantile(.1)
 
-p_loc <- apply(scores, 2, which.max)
+p_loc <- apply(scores, 2, which.max) |> unname() |> as.integer()
 # plant_names[p_loc]
 
-t_loc <- apply(scores, 1, which.max)
+t_loc <- apply(scores, 1, which.max) |> unname() |> as.integer()
 # tag_names[t_loc]
 
 #considder big.matrix
 ## TODO index logic needs checked
 
-plant_boolmat <- matrix(nrow = length(t_loc), ncol = length(p_loc))
-tag_boolmat <- matrix(nrow = length(t_loc), ncol = length(p_loc))
-foreach(i=1:length(p_loc), .combine = \(...){NULL}) %do% {
-  foreach(j=1:length(t_loc), .combine = \(...){NULL}) %do% {
-    plant_boolmat[p_loc[j],j] <- plant_names[p_loc[i]] == plant_names[j]
-    tag_boolmat[i,t_loc[i]] <- tag_names[t_loc[j]] == tag_names[i]
-  }
+# plant_boolmat <- matrix("", nrow = length(p_loc), ncol = length(t_loc))
+# foreach(j=1:length(t_loc), .combine = \(...){NULL}) %do% {
+#   plant_boolmat[p_loc[j],j] <- paste(sep = " - ", tag_names[t_loc[j]], plant_names[j])
+# }
+tag_plant_index <- foreach(j=1:length(t_loc), .combine = rbind) %do% {
+  c(tagname = tag_names[t_loc[j]], plantname = plant_names[j], tagi = t_loc[j] |> as.integer(), planti = j |> as.integer()) #, tpi = TRUE)
 }
+
+# tag_boolmat <- matrix("", nrow = length(p_loc), ncol = length(t_loc))
+# foreach(i=1:length(p_loc), .combine = \(...){NULL}) %do% {
+#   tag_boolmat[i,p_loc[i]] <- paste(sep = " - ", plant_names[p_loc[i]], tag_names[i])
+# }
+plant_tag_index <- foreach(i=1:length(p_loc), .combine = rbind) %do% {
+  c(plantname = plant_names[p_loc[i]], tagname = tag_names[i], planti = p_loc[i] |> as.integer(), tagi = i |> as.integer()) #, pti = TRUE)
+}
+
+joined_index = inner_join(tag_plant_index |> as_tibble(),plant_tag_index |> as_tibble()) |>
+  mutate(planti = planti |> as.integer(),
+         tagi = tagi |> as.integer(),
+         score = scores[planti*tagi])
+  # mutate(coords = paste(sep = ",",planti,tagi))
+
+scores[108*1110]
+
+
 # plant_boolmat |> as.integer() |> sum()
 # tag_boolmat |> as.integer() |> sum()
 
