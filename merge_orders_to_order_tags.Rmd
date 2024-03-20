@@ -212,7 +212,7 @@ mtag_orders <- foreach::foreach(i=order(mtag_files), .combine = \(x,y) dplyr::ro
   } |> janitor::remove_empty() |>
     dplyr::mutate(vendor = "MasterTag",
                   "Estimated Ship Date" = `Estimated Ship Date` |> mdy(),
-                  "MT Item Description" = `MT Item Description` |> str_remove_all("[:punct:]|®|™") |> str_squish())
+                  "MT Item Description" = `MT Item Description` |> str_remove_all("[:punct:]|®|™") |> str_squish() |> str_to_lower())
 
 
 # old mtag import method
@@ -332,10 +332,19 @@ plant_tag_index <- foreach(i=1:length(p_loc), .combine = rbind) %do% {
 joined_index = inner_join(tag_plant_index |> as_tibble(),plant_tag_index |> as_tibble()) |>
   mutate(planti = planti |> as.integer(),
          tagi = tagi |> as.integer(),
-         score = scores[planti*tagi])
+         score = scores[planti*tagi],
+         # pnamel = str_length(plantname),
+         # tnamel = str_length(tagname),
+         lmax = pmax(str_length(plantname),str_length(tagname)),
+         lmin = pmin(str_length(plantname),str_length(tagname)),
+         # score_adj1 = score/lmin,
+         # score_adj2 = score/(pmin(str_length(plantname),str_length(tagname))/pmax(str_length(plantname),str_length(tagname))),
+         # score_adj3 = score/(lmax/lmin),
+         # score_adj4 = -(lmax*lmin)/score,
+         # score_adj5 = -(lmax+lmin)/score,
+         score_adj = -(lmax)/score)
   # mutate(coords = paste(sep = ",",planti,tagi))
 
-scores[108*1110]
 
 
 # plant_boolmat |> as.integer() |> sum()
