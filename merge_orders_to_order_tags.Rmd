@@ -344,6 +344,11 @@ joined_index = inner_join(tag_plant_index |> as_tibble(),plant_tag_index |> as_t
          # score_adj5 = -(lmax+lmin)/score,
          score_adj = -(lmax)/score)
 
+
+mapply(\(x,y) {str_equal(x,y, ignore_case = TRUE)|str_equal(joined_index$plantname[match(x, joined_index$tagname)] ,y, ignore_case = TRUE)},mtag_orders$`MT Item Description`, mtag_orders$`MT Item Description`)
+
+
+
 # Next TODO: compare the input lists to the lookup table to return boolian lists compatible with fuzzyjoin(match_fun)
 
 
