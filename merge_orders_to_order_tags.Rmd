@@ -206,8 +206,11 @@ name_match <- function(x,y) {
            xi = xi |> as.integer(),
            score = scores[yi*xi],
            lmax = pmax(str_length(yname),str_length(xname)),
-           # lmin = pmin(str_length(yname),str_length(xname)),
-           score_adj = -(lmax)/score)
+           lmin = pmin(str_length(yname),str_length(xname)),
+           # score_adj = -(lmax)/score,
+           score_adj = if_else(score>=0,score,score/(lmax*lmin)))
+  
+  # TODO ? re-match using the unmatched items from each list. Could also reject matches below a cutoff score.
   
   # print(4)
 
@@ -424,12 +427,12 @@ tags_filtered <- mtag_orders |>
 # mapply(\(x,y) {str_equal(x,y, ignore_case = TRUE)|str_equal(joined_index$plantname[match(x, joined_index$tagname)] ,y, ignore_case = TRUE)},mtag_orders$`MT Item Description`, mtag_orders$`MT Item Description`)
 
 
-# testing out a correction factor for alignment scoring
+# # testing out a correction factor for alignment scoring
 # tag_names <- mtag_orders$`MT Item Description` |> unique()
-# plant_names <- filtered$Description |> unique() |> extract2(24)
+# plant_names <- filtered$Description |> unique() |> extract2(6)
 # # get(plant_names[1])
 # dummy_align <- tag_names |> as_tibble_col("tagname") |>
-#   add_column("score" = Biostrings::pairwiseAlignment(tag_names, plant_names,scoreOnly = TRUE) |> as.vector()) |>
+#   add_column("score" = Biostrings::pairwiseAlignment(tag_names |> string_alignment_prep(), plant_names |> string_alignment_prep(),scoreOnly = TRUE) |> as.vector()) |>
 #   mutate(lmax = pmax(str_length(plant_names),str_length(tagname)),
 #          lmin = pmin(str_length(plant_names),str_length(tagname)),
 #          # score_adj9 = score/length(tagname),
@@ -439,8 +442,10 @@ tags_filtered <- mtag_orders |>
 #          # score_adj2 = if_else(score>=0,score_adj5,score_adj4),
 #          # score_adj1 = score/lmax,
 #          # score_adj6 = -(lmax)/score,
-#          score_adj = if_else(score>=0,score,-(lmax+lmin)/score)) |>
-#   arrange(desc(score_adj))
+#          score_adj = if_else(score>=0,score,-(lmax+lmin)/score),
+#          # score_adj_a = if_else(score>=0,score,score*lmax/lmin),
+#          score_adj_b = if_else(score>=0,score,score/(lmax*lmin))) |>
+#   arrange(desc(score_adj_b))
 
 
 
