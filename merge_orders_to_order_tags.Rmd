@@ -275,7 +275,8 @@ filtered <- joined |>
 rm(cluster)
 
 tags_filtered <- mtag_orders |>
-  dplyr::filter((`Estimated Ship Date` >= "20240101" |> ymd())&(`Estimated Ship Date` < "20240701" |> ymd()))
+  dplyr::filter((`Estimated Ship Date` >= "20240101" |> ymd())&(`Estimated Ship Date` < "20240701" |> ymd()),
+                str_detect(`PO #` |> str_to_lower(),"(herb)|(veg)|(daniel)"))
 
 ```
 
@@ -394,7 +395,7 @@ name_match <- function(x,y) {
   # x_u <- generics::intersect(x_u,xy_setdiff)
   # y_u <- generics::intersect(y_u,xy_setdiff)
 
-  doParallel::registerDoParallel(cores=n_cores*3/4)
+  doParallel::registerDoParallel(cores=n_cores-1)
   scores <- foreach::foreach(i=1:length(y_u), .combine = rbind) %dopar% {
     # print("1a")
     raw_score <- Biostrings::pairwiseAlignment(x_u, y_u[i],scoreOnly = TRUE)
