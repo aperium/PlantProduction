@@ -462,7 +462,7 @@ aligned <- fuzzyjoin::fuzzy_full_join(filtered, tags_filtered, by=c("Description
 
 
 ```{r export}
-filtered |>
+aligned |>
   write_xlsx_flex(path = dir_path |> fs::path("2024", "herbveg 2024", paste0("tags_to_order_",now() |> year(), now() |> isoweek() |> str_pad(2,"left",pad="0"),".xlsx")))
 
 
