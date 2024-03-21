@@ -351,6 +351,26 @@ tags_filtered <- mtag_orders |>
 # 
 # mapply(\(x,y) {str_equal(x,y, ignore_case = TRUE)|str_equal(joined_index$plantname[match(x, joined_index$tagname)] ,y, ignore_case = TRUE)},mtag_orders$`MT Item Description`, mtag_orders$`MT Item Description`)
 
+
+# testing out a correction factor for alignment scoring
+tag_names <- mtag_orders$`MT Item Description` |> unique()
+plant_names <- filtered$Description |> unique() |> extract2(24)
+# get(plant_names[1])
+dummy_align <- tag_names |> as_tibble_col("tagname") |>
+  add_column("score" = Biostrings::pairwiseAlignment(tag_names, plant_names,scoreOnly = TRUE) |> as.vector()) |>
+  mutate(lmax = pmax(str_length(plant_names),str_length(tagname)),
+         lmin = pmin(str_length(plant_names),str_length(tagname)),
+         # score_adj9 = score/length(tagname),
+         # score_adj8 = score/length(plant_names),
+         # score_adj4 = -(lmax+lmin)/score,
+         # score_adj5 = score,
+         # score_adj2 = if_else(score>=0,score_adj5,score_adj4),
+         # score_adj1 = score/lmax,
+         # score_adj6 = -(lmax)/score,
+         score_adj = if_else(score>=0,score,-(lmax+lmin)/score)) |>
+  arrange(desc(score_adj))
+
+
 name_match <- function(x,y) {
 
   x_u <- x |> unique()
@@ -376,7 +396,8 @@ name_match <- function(x,y) {
   doParallel::registerDoParallel(cores=n_cores*3/4)
   scores <- foreach::foreach(i=1:length(y_u), .combine = rbind) %dopar% {
     # print("1a")
-    Biostrings::pairwiseAlignment(x_u, y_u[i],scoreOnly = TRUE)
+    raw_score <- Biostrings::pairwiseAlignment(x_u, y_u[i],scoreOnly = TRUE)
+    dplyr::if_else(raw_score>=0,raw_score,-length(paste0(x_u, y_u[i]))/raw_score)
   } |> unlist()
   # print("1b")
   doParallel::stopImplicitCluster()
@@ -409,7 +430,7 @@ name_match <- function(x,y) {
   return(out2)
 }
 
-# testout <- name_match(mtag_orders$`MT Item Description`, filtered$Description)
+# testout <- name_match(mtag_orders$`MT Item Description` |> unique(), filtered$Description |> unique())
 
 aligned <- fuzzyjoin::fuzzy_full_join(filtered, mtag_orders, by=c("Description"="MT Item Description"), match_fun = name_match)
 
