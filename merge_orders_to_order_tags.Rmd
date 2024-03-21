@@ -325,10 +325,10 @@ e_combined <- dplyr::full_join(e_orders, e_delivered) |>
 
 alignment <- c("vendor" = "vendor", "Order #" = "Order Number","Customer PO #" = "PO Number", "Order Date" = "Sales Order Date", "Ship Date" = "Ship Date", "Week" = "Ship Week", "Product #" = "Ball Material Number", "Description" = "Description", "Supplier" = "Supplier", "QTY Ordered" = "Quantity", "Total" = "Total Extended Value")
 
-joined <- full_join(e_combined, b_orders, by=alignment) %>%
-  select(names(alignment)) |>
-  rowwise() |>
-  mutate(Description = Description |> str_to_lower() |> str_extract_all("([:alpha:]{2,})|([:digit:]*(\\.[:digit:]+)(?!C$))", simplify = TRUE) |> str_squish() |> unique() |> as.character() |> str_flatten(collapse = " "))
+plants_joined <- full_join(e_combined, b_orders, by=alignment) %>%
+  select(names(alignment)) ## |>
+  # rowwise() |>
+  # mutate(Description = Description |> str_to_lower() |> str_extract_all("([:alpha:]{2,})|([:digit:]*(\\.[:digit:]+)(?!C$))", simplify = TRUE) |> str_squish() |> unique() |> as.character() |> str_flatten(collapse = " "))
 
 ```
 
@@ -337,12 +337,12 @@ joined <- full_join(e_combined, b_orders, by=alignment) %>%
 cluster <- new_cluster(n_cores-1)
 cluster_library(cluster, installed_req_pkgs)
 
-filtered <- joined |>
+plants_filtered <- plants_joined |>
   partition(cluster) |>
   dplyr::filter((`Ship Date` >= "20240101" |> ymd())&(`Ship Date` < "20240701" |> ymd()),
                 Supplier |> str_equal("Kube Pak"),
                 (Description |> str_detect("(^|[:space:])(HE)|(VF)[:space:]"))|(`Customer PO #` |> str_to_lower() |> str_detect("(herb)|(veg)"))) |>
-  dplyr::mutate(Description = Description |> str_remove_all("(?<=([:space:]|^))((herb)|(he)|(vf))(?=([:space:]|$))") |> str_squish()) |>
+  # dplyr::mutate(Description = Description |> str_remove_all("(?<=([:space:]|^))((herb)|(he)|(vf))(?=([:space:]|$))") |> str_squish()) |>
   collect()
 
 rm(cluster)
@@ -451,7 +451,15 @@ tags_filtered <- mtag_orders |>
 
 # testout <- name_match(mtag_orders$`MT Item Description` |> unique(), filtered$Description |> unique())
 
-aligned <- fuzzyjoin::fuzzy_full_join(filtered, tags_filtered, by=c("Description"="MT Item Description"), match_fun = name_match)
+plants_prep <- plants_filtered |>
+  summarise(`QTY Ordered` = sum(`QTY Ordered`), .by = any_of(c("Description","Product #"))) |>
+  rename_with(\(x) paste0("plants_",x))
+
+tags_prep <- tags_filtered |>
+  summarise(`Ordered Quantity` = sum(`Ordered Quantity`), .by = any_of(c("MT Item Description","MT ID"))) |>
+  rename_with(\(x) paste0("tags_",x))
+
+aligned <- fuzzyjoin::fuzzy_full_join(plants_prep, tags_prep, by=c("plants_Description"="tags_MT Item Description"), match_fun = name_match)
 
 
 # can i use dplyr::join with dplyr::closest() with pairwiseAligment scores? or maybe need to use fuzzyjoin
