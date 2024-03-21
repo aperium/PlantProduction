@@ -346,29 +346,30 @@ tags_filtered <- mtag_orders |>
 #          # score_adj3 = score/(lmax/lmin),
 #          # score_adj4 = -(lmax*lmin)/score,
 #          # score_adj5 = -(lmax+lmin)/score,
-#          score_adj = -(lmax)/score)
+#          score_adj0 = -(lmax)/score,
+#          score_adj = if_else(score>=0,score,-(lmax+lmin)/score))
 # 
 # 
 # mapply(\(x,y) {str_equal(x,y, ignore_case = TRUE)|str_equal(joined_index$plantname[match(x, joined_index$tagname)] ,y, ignore_case = TRUE)},mtag_orders$`MT Item Description`, mtag_orders$`MT Item Description`)
 
 
 # testing out a correction factor for alignment scoring
-tag_names <- mtag_orders$`MT Item Description` |> unique()
-plant_names <- filtered$Description |> unique() |> extract2(24)
-# get(plant_names[1])
-dummy_align <- tag_names |> as_tibble_col("tagname") |>
-  add_column("score" = Biostrings::pairwiseAlignment(tag_names, plant_names,scoreOnly = TRUE) |> as.vector()) |>
-  mutate(lmax = pmax(str_length(plant_names),str_length(tagname)),
-         lmin = pmin(str_length(plant_names),str_length(tagname)),
-         # score_adj9 = score/length(tagname),
-         # score_adj8 = score/length(plant_names),
-         # score_adj4 = -(lmax+lmin)/score,
-         # score_adj5 = score,
-         # score_adj2 = if_else(score>=0,score_adj5,score_adj4),
-         # score_adj1 = score/lmax,
-         # score_adj6 = -(lmax)/score,
-         score_adj = if_else(score>=0,score,-(lmax+lmin)/score)) |>
-  arrange(desc(score_adj))
+# tag_names <- mtag_orders$`MT Item Description` |> unique()
+# plant_names <- filtered$Description |> unique() |> extract2(24)
+# # get(plant_names[1])
+# dummy_align <- tag_names |> as_tibble_col("tagname") |>
+#   add_column("score" = Biostrings::pairwiseAlignment(tag_names, plant_names,scoreOnly = TRUE) |> as.vector()) |>
+#   mutate(lmax = pmax(str_length(plant_names),str_length(tagname)),
+#          lmin = pmin(str_length(plant_names),str_length(tagname)),
+#          # score_adj9 = score/length(tagname),
+#          # score_adj8 = score/length(plant_names),
+#          # score_adj4 = -(lmax+lmin)/score,
+#          # score_adj5 = score,
+#          # score_adj2 = if_else(score>=0,score_adj5,score_adj4),
+#          # score_adj1 = score/lmax,
+#          # score_adj6 = -(lmax)/score,
+#          score_adj = if_else(score>=0,score,-(lmax+lmin)/score)) |>
+#   arrange(desc(score_adj))
 
 
 name_match <- function(x,y) {
@@ -397,7 +398,7 @@ name_match <- function(x,y) {
   scores <- foreach::foreach(i=1:length(y_u), .combine = rbind) %dopar% {
     # print("1a")
     raw_score <- Biostrings::pairwiseAlignment(x_u, y_u[i],scoreOnly = TRUE)
-    dplyr::if_else(raw_score>=0,raw_score,-length(paste0(x_u, y_u[i]))/raw_score)
+    dplyr::if_else(raw_score>=0,raw_score,-stringr::str_length(paste0(x_u, y_u[i]))/raw_score)
   } |> unlist()
   # print("1b")
   doParallel::stopImplicitCluster()
