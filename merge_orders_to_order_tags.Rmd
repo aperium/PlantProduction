@@ -154,7 +154,10 @@ pairwiseAlightmentMatch = function(x,y) {Biostrings::pairwiseAlignment(x,y,score
 string_alignment_prep <- function(x) {
   prep_one <- function(y) {
     y |> 
-      stringr::str_to_lower() |> 
+      stringr::str_to_lower() |>
+      stringr::str_replace_all("(?<=[:alnum:])[:punct:](?=[:alnum:])"," ") |>
+      stringr::str_remove_all("[:punct:]|®|™") |>
+      stringr::str_remove_all("(?<=([:space:]|^))(herb)|(he)|(vf)(?=([:space:]|$))") |>
       stringr::str_extract_all("([:alpha:]{2,})|(([:digit:]*(\\.[:digit:]+)?)(?!c$))", simplify = TRUE) |> 
       stringr::str_squish() |> 
       stringr::str_unique() |> 
@@ -284,8 +287,8 @@ mtag_orders <- foreach::foreach(i=order(mtag_files), .combine = \(x,y) dplyr::ro
     dplyr::distinct()
   } |> janitor::remove_empty() |>
     dplyr::mutate(vendor = "MasterTag",
-                  "Estimated Ship Date" = `Estimated Ship Date` |> mdy(),
-                  "MT Item Description" = `MT Item Description` |> str_remove_all("[:punct:]|®|™") |> str_squish() |> str_to_lower())
+                  "Estimated Ship Date" = `Estimated Ship Date` |> mdy() ) #,
+                  # "MT Item Description" = `MT Item Description` |> str_remove_all("[:punct:]|®|™") |> str_squish() |> str_to_lower())
 
 
 # old mtag import method
@@ -452,11 +455,11 @@ tags_filtered <- mtag_orders |>
 # testout <- name_match(mtag_orders$`MT Item Description` |> unique(), filtered$Description |> unique())
 
 plants_prep <- plants_filtered |>
-  summarise(`QTY Ordered` = sum(`QTY Ordered`), .by = any_of(c("Description","Product #"))) |>
+  summarise(`QTY Ordered` = sum(`QTY Ordered`), .by = any_of(c("Description"))) |>
   rename_with(\(x) paste0("plants_",x))
 
 tags_prep <- tags_filtered |>
-  summarise(`Ordered Quantity` = sum(`Ordered Quantity`), .by = any_of(c("MT Item Description","MT ID"))) |>
+  summarise(`Ordered Quantity` = sum(`Ordered Quantity`), .by = any_of(c("MT Item Description"))) |>
   rename_with(\(x) paste0("tags_",x))
 
 aligned <- fuzzyjoin::fuzzy_full_join(plants_prep, tags_prep, by=c("plants_Description"="tags_MT Item Description"), match_fun = name_match)
@@ -464,6 +467,25 @@ aligned <- fuzzyjoin::fuzzy_full_join(plants_prep, tags_prep, by=c("plants_Descr
 
 # can i use dplyr::join with dplyr::closest() with pairwiseAligment scores? or maybe need to use fuzzyjoin
 
+
+```
+
+```{r tags_per_plug}
+
+aligned %<>%
+  mutate(subdept = case_when(plants_Description |> str_to_lower() |> str_detect("(?<=(^|[:space:]))(he(rb)?)(?=($|[:space:]))") ~ "herb",
+                             plants_Description |> str_to_lower() |> str_detect("(?<=(^|[:space:]))(vf)(?=($|[:space:]))") ~ "veg",
+                             plants_Description |> str_to_lower() |> str_detect("(?<=(^|[:space:]))(lavandula)|(lavender)(?=($|[:space:]))") ~ "herb",
+                             plants_Description |> str_to_lower() |> str_detect("(?<=(^|[:space:]))(eucalyptus)|(lemon[:space:]?bush)(?=($|[:space:]))") ~ "herb",
+                             plants_Description |> str_to_lower() |> str_detect("(?<=(^|[:space:]))(marigold)(?=($|[:space:]))") ~ "veg",
+                             plants_Description |> str_to_lower() |> str_detect("(?<=(^|[:space:]))(melampodium)(?=($|[:space:]))") ~ "veg",
+                             .default = NA),
+         tags_per_plug = case_match(subdept,
+                                    c("herb") ~ 1,
+                                    c("veg") ~ 4,
+                                    .default = 1),
+         tags_need = `plants_QTY Ordered` / tags_per_plug,
+         tags_deficit = (tags_need - datawizard::convert_na_to(`tags_Ordered Quantity`,replacement = 0)) |> pmax(0))
 
 ```
 
