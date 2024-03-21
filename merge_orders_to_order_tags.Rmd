@@ -372,6 +372,21 @@ tags_filtered <- mtag_orders |>
 #          score_adj = if_else(score>=0,score,-(lmax+lmin)/score)) |>
 #   arrange(desc(score_adj))
 
+# name order function
+string_alignment_prep <- function(x) {
+  prep_one <- function(y) {
+    y |> 
+      str_to_lower() |> 
+      str_extract_all("([:alpha:]{2,})|(([:digit:]*(\\.[:digit:]+)?)(?!c$))", simplify = TRUE) |> 
+      str_squish() |> 
+      unique() |> 
+      as.character() |> 
+      str_sort() |> 
+      str_flatten(collapse = " ")
+  }
+  sapply(x, prep_one)
+}
+# c("hello `this` 'is' another-sentence 3.5","but this isn't a very good one 288C") |> string_alignment_prep()
 
 name_match <- function(x,y) {
 
@@ -434,7 +449,7 @@ name_match <- function(x,y) {
 
 # testout <- name_match(mtag_orders$`MT Item Description` |> unique(), filtered$Description |> unique())
 
-aligned <- fuzzyjoin::fuzzy_full_join(filtered, mtag_orders, by=c("Description"="MT Item Description"), match_fun = name_match)
+aligned <- fuzzyjoin::fuzzy_full_join(filtered, tags_filtered, by=c("Description"="MT Item Description"), match_fun = name_match)
 
 
 # can i use dplyr::join with dplyr::closest() with pairwiseAligment scores? or maybe need to use fuzzyjoin
