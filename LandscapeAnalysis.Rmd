@@ -1,0 +1,172 @@
+---
+title: Landscape Analysis
+author: Daniel R. Williams ^[Director of Quality Control, Greenstreet Growers, Lothian,
+  MD] ^[PhD Candidate, Dept. of Ag. & Crop Science, Ohio State University, Columbus,  Ohio]
+date: 26 Feburary 2024
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+# Abstract
+
+
+```{r setup}
+# this block loads required packages and some custom functions. 
+
+cran_pacs <- c("librarian", "pak", "rlang", "pkgbuild","rmarkdown", "BiocManager", "tidyselect", "tidyverse", "magrittr", "stats", "measurements", "knitr", "foreach", "doParallel", "parallel", "fs", "janitor", "readxl", "writexl","fuzzyjoin", "plyr", "stringdist", "multidplyr", "lubridate", "readr", "tidyr", "forcats", "purrr", "stringr") 
+dev_pacs <- c() ## "aperium/rutil" 
+bioc_pacs <- c("Biostrings")
+py_pacs <- c("camelot-py")
+
+## function to quietly find list of packages
+find_package_quiet <- function(pkgs, ...) unlist(find.package(pkgs, quiet = TRUE, ...))
+install_as_needed <- function(pacs, inst_fun = install.packages, check_fun = find_package_quiet, ...) {
+  inst_fun(setdiff(pacs,names(unlist(sapply(pacs,\(x) check_fun(x))))),...)
+}
+
+# install cran packs
+if (length(cran_pacs) > 0) install_as_needed(cran_pacs,install.packages, quiet = TRUE)
+
+# install github dev packs
+if (length(dev_pacs)>0) {
+  if (!requireNamespace("pak", quietly = TRUE)[]) install.packages("pak", quiet = TRUE)
+  install_as_needed(dev_pacs,pak::pak, ask = FALSE, upgrade = TRUE)
+}
+
+# install bioc packs
+if (length(bioc_pacs)>0) {
+  if (!requireNamespace("BiocManager", quietly = TRUE)[]) install.packages("BiocManager", quiet = TRUE)
+  # install_as_needed(c("DBI","xfun"))
+  BiocManager::install(version = "3.18", update = FALSE, ask=FALSE)
+  install_as_needed(bioc_pacs,BiocManager::install, update = FALSE, ask=FALSE)
+}
+
+if (!requireNamespace("librarian", quietly = TRUE)[]) install.packages("librarian", quiet = TRUE)
+if (!requireNamespace("pak", quietly = TRUE)[]) install.packages("pak", quiet = TRUE)
+librarian::shelf(cran_pacs, bioc_pacs, dev_pacs, quiet = TRUE)
+installed_req_pkgs <- pak::pkg_status(c(cran_pacs, bioc_pacs, dev_pacs))$package
+loaded_pacs <- search() |> stringr::str_extract("(?<=:).*$") |> na.omit()
+
+
+# install python packs
+if (length(py_pacs)>0) {
+  if (!requireNamespace("reticulate", quietly = TRUE)[]) install.packages("reticulate", quiet = TRUE)
+  if (!reticulate::py_available(initialize = TRUE)) reticulate::install_python()
+  if (reticulate::py_available(initialize = TRUE)) reticulate::py_install(py_pacs)
+}
+
+## detecting and setting the cores to use
+n_cores <- parallel::detectCores()
+## register cores for foreach
+# registerDoParallel(cores=n_cores-1)
+# stopImplicitCluster()
+
+
+```
+
+```{r xlxs_function}
+# These are some sloppy workarounds for reading and writing data from and to excel files. Some of the readxl and writexl are preferred but they are not universally supported. If they are not installed, these functions use on of the other two packages for xlsx-file handling in the order of preference (openxlsx is preferred over xlsx). For simplicity and robustness many features of the packages are not accessible except where they can be translated 1-to-1 across all three. Ideally, The resulting data should be approximately identical in structure, datatypes, and column names regardless of the function it is using to read or write data.
+
+read_xlsx_flex <- function(path, sheet = NULL, range = NULL, col_names = TRUE, ...) {
+  if(nzchar(find.package("readxl"))) use_which <- "readxl"
+  else if (nzchar(find.package("openxlsx"))) use_which <- "openxlsx"
+  else if (nzchar(find.package("xlsx"))) use_which <- "xlsx"
+  else return("please install one of: readxl, openxlsx, xlsx")
+  #
+  sheet_index <- switch (typeof(sheet),
+    "NULL" = 1,
+    "double" = sheet,
+    "integer" = sheet,
+    "numeric" = sheet,
+    "character" = NULL
+  )
+  sheet_name <- switch (typeof(sheet),
+    "NULL" = NULL,
+    "double" = NULL,
+    "integer" = NULL,
+    "numeric" = NULL,
+    "character" = sheet
+  )
+  # use_which <- "readxl"
+  switch (use_which,
+    "readxl" = readxl::read_xlsx(path = path, sheet = sheet, range = range, col_names = col_names, guess_max = Inf, ...),
+    "openxlsx" = openxlsx::read.xlsx(xlsxFile = path, sheet = ifelse(!rlang::is_null(sheet_index), sheet_index, 1) , colNames = col_names, check.names = FALSE, sep.names = " ", ...),
+    "xlsx" = xlsx::read.xlsx(file = path, sheetIndex = sheet_index, sheetName = sheet_name, header = col_names, as.data.frame=TRUE, check.names = FALSE, ...)
+  )
+}
+
+
+write_xlsx_flex <- function(x, path = tempfile(fileext = ".xlsx"), ...) {
+  if(nzchar(find.package("writexl"))) use_which <- "writexl"
+  else if (nzchar(find.package("openxlsx"))) use_which <- "openxlsx"
+  else if (nzchar(find.package("xlsx"))) use_which <- "xlsx"
+  else return("please install one of: writexl, openxlsx, xlsx")
+  # use_which <- "xlsx"
+  switch (use_which,
+    "writexl" = writexl::write_xlsx(x = x, path = path, col_names = TRUE, ...),
+    "openxlsx" = openxlsx::write.xlsx(x = x, file = path, asTable = TRUE, overwrite = TRUE, ...),
+    "xlsx" = xlsx::write.xlsx2(x = as.data.frame(x), file = path, row.names = FALSE, showNA = FALSE, ...) # puts the rownames in column A. removing them throws bugs.
+  )
+}
+
+```
+
+
+```{r utilfuns}
+
+check_empty = function(x) (is.na(x)|str_equal(x,"")|str_equal(x,"N/A", ignore_case = TRUE)|str_equal(x,"NA", ignore_case = TRUE)|(x==0)|is_na(x)|is_chr_na(x)|is_null(x))
+
+column_not_empty = function(x) not(all(check_empty(x)))
+
+remove_empties = function(x) x %>% dplyr::select(where(column_not_empty)) %>% janitor::remove_empty()
+
+
+```
+
+
+
+```{r sourcefiles}
+
+## define paths
+CP_path <- "/Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstreet/Production Planning QC/Plant Sales and Orders/CP export" |> fs::path_home()
+
+# CounterPoint Files
+ord_hist_ln_file <- CP_path |> fs::dir_ls(regexp = "VI_PS_ORD_HIST_LIN_[[:digit:]]{4}.*\\.(c|C)(s|S)(v|V)")
+
+# output path
+out_path <- "/Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstreet/Production Planning QC/Plant Sales and Orders/2024/LandscapeAnalysis" |> fs::path_home()
+
+```
+
+
+
+
+```{r CP-ticket-history-import}
+
+## get table column names and table human-readable names
+
+ord_hist_ln_names <- fs::path(CP_path, "VI_PS_ORD_HIST_LIN-names.txt") |> 
+  readr::read_csv(col_names = c("list")) |>
+  mutate(key = list %>% str_squish() %>% str_extract("(?<=\\()[:graph:]*(?=\\)$)") %>% str_trim(),
+         value = list %>% str_squish() %>% str_extract(".*(?=\\([:graph:]*$)") %>% str_trim()) %>%
+  select(-list) %>%
+  unique() %>%
+  na.omit()
+
+## get order history line data
+x <- ord_hist_ln_names$value
+names(x) <- ord_hist_ln_names$key
+registerDoParallel(cores=n_cores-1)
+ord_hist_ln_data <- foreach::foreach(i=1:length(ord_hist_ln_file), .combine = rbind, .packages=c("tidyverse","doParallel")) %dopar% 
+    (read_csv(ord_hist_ln_file[i], col_names = TRUE, guess_max = 10000, num_threads = n_cores-1, col_select=(c("Business date", "Presumed cost", "Cost", "Document", "Item number", "Description", "Item type", "Price", "Quantity shipped", "Gross ext prc", "Sequence #") %>% match(.,ord_hist_ln_names$value) %>% foreach(i=.) %dopar% ord_hist_ln_names$key[i] %>% unlist()))) %>%
+  plyr::rename(.,replace=x) |>
+  dplyr::mutate(`Business date` = `Business date` %>% ymd_hms())
+stopImplicitCluster()
+
+
+#mutate some variables
+ord_hist_ln_data %<>%
+  dplyr::filter(str_equal(`Item number`,"G-105828"))
+
+```
