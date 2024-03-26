@@ -165,7 +165,7 @@ ord_hist_ln_data <- foreach::foreach(i=1:length(ord_hist_ln_file), .combine = rb
 stopImplicitCluster()
 
 
-#mutate some variables
+# filter
 ord_hist_ln_data %<>%
   dplyr::filter(str_equal(`Item number`,"G-105828"))
 
