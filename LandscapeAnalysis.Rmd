@@ -157,16 +157,14 @@ ord_hist_ln_names <- fs::path(CP_path, "VI_PS_ORD_HIST_LIN-names.txt") |>
 ## get order history line data
 x <- ord_hist_ln_names$value
 names(x) <- ord_hist_ln_names$key
+order <- ord_hist_ln_file |> fs::path_ext_remove() |> fs::path_file() |> stringr::str_extract("[:digit:]*$") |> str_pad(8,"right",pad="1") |> ymd() |> order()
 registerDoParallel(cores=n_cores-1)
-ord_hist_ln_data <- foreach::foreach(i=1:length(ord_hist_ln_file), .combine = rbind, .packages=c("tidyverse","doParallel")) %dopar% 
-    (read_csv(ord_hist_ln_file[i], col_names = TRUE, guess_max = 10000, num_threads = n_cores-1, col_select=(c("Business date", "Presumed cost", "Cost", "Document", "Item number", "Description", "Item type", "Price", "Quantity shipped", "Gross ext prc", "Sequence #") %>% match(.,ord_hist_ln_names$value) %>% foreach(i=.) %dopar% ord_hist_ln_names$key[i] %>% unlist()))) %>%
+ord_hist_ln_data <- foreach::foreach(i=order, .combine = \(x,y) dplyr::rows_upsert(x,y,by = c("TKT_NO", "SEQ_NO")), .packages=c("tidyverse","doParallel")) %dopar%     {read_csv(ord_hist_ln_file[i], col_names = TRUE, guess_max = 1000000, num_threads = n_cores-1, col_select=(c("Business date", "Presumed cost", "Cost", "Document", "Item number", "Description", "Item type", "Price", "Quantity shipped", "Gross ext prc", "Sequence #") %>% match(.,ord_hist_ln_names$value) %>% foreach(i=.) %dopar% ord_hist_ln_names$key[i] %>% unlist()))} %>%
   plyr::rename(.,replace=x) |>
-  dplyr::mutate(`Business date` = `Business date` %>% ymd_hms())
+  dplyr::filter(str_equal(`Item number`,"G-105828")) |>
+  dplyr::mutate(`Business date` = `Business date` |> ymd_hms()) |>
+  dplyr::arrange(desc(`Business date`))
 stopImplicitCluster()
 
-
-# filter
-ord_hist_ln_data %<>%
-  dplyr::filter(str_equal(`Item number`,"G-105828"))
 
 ```
