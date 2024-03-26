@@ -133,6 +133,7 @@ CP_path <- "/Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstr
 
 # CounterPoint Files
 ord_hist_ln_file <- CP_path |> fs::dir_ls(regexp = "VI_PS_ORD_HIST_LIN_[[:digit:]]{4}.*\\.(c|C)(s|S)(v|V)")
+ord_hist_file <-  CP_path |> fs::dir_ls(regexp = "VI_PS_ORD_HIST_[[:digit:]]{4}.*\\.(c|C)(s|S)(v|V)")
 
 # output path
 out_path <- "/Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstreet/Production Planning QC/Plant Sales and Orders/2024/LandscapeAnalysis" |> fs::path_home()
@@ -140,12 +141,8 @@ out_path <- "/Greenstreet Growers/TeamSite - Documents/Shared/Production Greenst
 ```
 
 
-
-
-```{r CP-ticket-history-import}
-
+```{r CP-order-history-names-import}
 ## get table column names and table human-readable names
-
 ord_hist_ln_names <- fs::path(CP_path, "VI_PS_ORD_HIST_LIN-names.txt") |> 
   readr::read_csv(col_names = c("list")) |>
   mutate(key = list %>% str_squish() %>% str_extract("(?<=\\()[:graph:]*(?=\\)$)") %>% str_trim(),
@@ -154,17 +151,44 @@ ord_hist_ln_names <- fs::path(CP_path, "VI_PS_ORD_HIST_LIN-names.txt") |>
   unique() %>%
   na.omit()
 
-## get order history line data
+## get table column names and table human-readable names
+ord_hist_names <- fs::path(CP_path, "VI_PS_ORD_HIST-names.txt") |> 
+  readr::read_csv(col_names = c("list")) |>
+  mutate(key = list %>% str_squish() %>% str_extract("(?<=\\()[:graph:]*(?=\\)$)") %>% str_trim(),
+         value = list %>% str_squish() %>% str_extract(".*(?=\\([:graph:]*$)") %>% str_trim()) %>%
+  select(-list) %>%
+  unique() %>%
+  na.omit()
+
+
+#dplyr::inner_join(ord_hist_ln_names,ord_hist_names)$key
+```
+
+
+```{r CP-order-history-import}
+registerDoParallel(cores=n_cores-1)
+
+## get order history line data   ##by=
 x <- ord_hist_ln_names$value
 names(x) <- ord_hist_ln_names$key
 order <- ord_hist_ln_file |> fs::path_ext_remove() |> fs::path_file() |> stringr::str_extract("[:digit:]*$") |> str_pad(8,"right",pad="1") |> ymd() |> order()
-registerDoParallel(cores=n_cores-1)
-ord_hist_ln_data <- foreach::foreach(i=order, .combine = \(x,y) dplyr::rows_upsert(x,y,by = c("TKT_NO", "SEQ_NO")), .packages=c("tidyverse","doParallel")) %dopar%     {read_csv(ord_hist_ln_file[i], col_names = TRUE, guess_max = 1000000, num_threads = n_cores-1, col_select=(c("Business date", "Presumed cost", "Cost", "Document", "Item number", "Description", "Item type", "Price", "Quantity shipped", "Gross ext prc", "Sequence #") %>% match(.,ord_hist_ln_names$value) %>% foreach(i=.) %dopar% ord_hist_ln_names$key[i] %>% unlist()))} %>%
+ord_hist_ln_data <- foreach::foreach(i=order, .combine = \(x,y) dplyr::rows_upsert(x,y,by = c("TKT_NO", "SEQ_NO","EVENT_NO","DOC_ID")), .packages=c("tidyverse","doParallel")) %dopar%     {read_csv(ord_hist_ln_file[i], col_names = TRUE, guess_max = as.integer(.Machine$integer.max/100), num_threads = n_cores-1, col_select=(c("Business date", "Presumed cost", "Cost", "Document", "Event number", "Document ID", "Item number", "Description", "Item type", "Price", "Quantity shipped", "Gross ext prc", "Sequence #") %>% match(.,ord_hist_ln_names$value) %>% foreach(i=.) %dopar% ord_hist_ln_names$key[i] %>% unlist()))} %>%
   plyr::rename(.,replace=x) |>
   dplyr::filter(str_equal(`Item number`,"G-105828")) |>
   dplyr::mutate(`Business date` = `Business date` |> ymd_hms()) |>
   dplyr::arrange(desc(`Business date`))
-stopImplicitCluster()
 
+## get order history data
+y <- ord_hist_names$value
+names(y) <- ord_hist_names$key
+order <- ord_hist_file |> fs::path_ext_remove() |> fs::path_file() |> stringr::str_extract("[:digit:]*$") |> str_pad(8,"right",pad="1") |> ymd() |> order()
+ord_hist_data <- foreach::foreach(i=order, .combine = \(x,y) dplyr::rows_upsert(x,y,by = c("TKT_NO", "DOC_ID","EVENT_NO","DOC_ID")), .packages=c("tidyverse","doParallel")) %dopar%     {read_csv(ord_hist_file[i], col_names = TRUE, guess_max = as.integer(.Machine$integer.max/100), num_threads = n_cores-1, col_select=(c("Business date", "Document", "Event number", "Document ID", "Customer #", "Note") %>% match(.,ord_hist_names$value) %>% foreach(i=.) %dopar% ord_hist_names$key[i] %>% unlist() |> c("SHIP_ADRS_1","SHIP_ADRS_2","SHIP_CITY","SHIP_STATE","SHIP_ZIP_COD","SHIP_CNTRY")))} %>%
+  plyr::rename(.,replace=y) |>
+  dplyr::mutate(`Business date` = `Business date` |> ymd_hms(),
+                Note = Note |> str_replace_all("\\\\20"," ")|> str_replace_all("\\\\0D\\\\0A","\n")) |>
+  dplyr::arrange(desc(`Business date`))
+
+
+stopImplicitCluster()
 
 ```
