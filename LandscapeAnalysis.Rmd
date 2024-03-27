@@ -14,7 +14,7 @@ output:
 ```{r setup}
 # this block loads required packages and some custom functions. 
 
-cran_pacs <- c("librarian", "pak", "rlang", "pkgbuild","rmarkdown", "BiocManager", "tidyselect", "tidyverse", "magrittr", "stats", "measurements", "knitr", "foreach", "doParallel", "parallel", "fs", "janitor", "readxl", "writexl","fuzzyjoin", "plyr", "stringdist", "multidplyr", "lubridate", "readr", "tidyr", "forcats", "purrr", "stringr") 
+cran_pacs <- c("librarian", "pak", "rlang", "pkgbuild","rmarkdown", "BiocManager", "tidyselect", "tidyverse", "magrittr", "stats", "measurements", "knitr", "foreach", "doParallel", "parallel", "fs", "janitor", "readxl", "writexl","fuzzyjoin", "plyr", "stringdist", "multidplyr", "lubridate", "readr", "tidyr", "forcats", "purrr", "stringr","gmapsdistance") 
 dev_pacs <- c() ## "aperium/rutil" 
 bioc_pacs <- c("Biostrings")
 py_pacs <- c("camelot-py")
@@ -138,6 +138,12 @@ ord_hist_file <-  CP_path |> fs::dir_ls(regexp = "VI_PS_ORD_HIST_[[:digit:]]{4}.
 # output path
 out_path <- "/Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstreet/Production Planning QC/Plant Sales and Orders/2024/LandscapeAnalysis" |> fs::path_home()
 
+# Keys Paths
+myGoogleMapsKey <- "/Greenstreet Growers/TeamSite - Documents/Users/Daniel/Projects/Google Maps API/PersonalGoogleMapsAPIKey.txt" |> 
+  fs::path_home() |>
+  read_file() |>
+  gmapsdistance::set.api.key()
+
 ```
 
 
@@ -209,17 +215,29 @@ ord_hist_data <- foreach::foreach(i=order, .combine = \(x,y) dplyr::rows_upsert(
   } %>%
   plyr::rename(.,replace=y) |>
   dplyr::mutate(`Business date` = `Business date` |> ymd_hms(),
-                Note = Note |> str_replace_all("\\\\20"," ")|> str_replace_all("\\\\0D\\\\0A","\n")) |>
+                Note = Note |> 
+                  str_replace_all("\\\\20"," ") |> 
+                  str_replace_all("\\\\0D\\\\0A","\n") |> 
+                  str_replace_all("\\\\27","'") |> 
+                  str_replace_all("\\\\22","\"") |> 
+                  str_replace_all("\\\\26","&")) |>
   dplyr::arrange(desc(`Business date`))
 
 stopImplicitCluster()
 ```
 
 ```{r merge_order_hist}
+startLocation = "Greenstreet Growers, Lothian, MD 20711"
 
 ord_hist_joined <- left_join(ord_hist_ln_data, ord_hist_data) |>
   dplyr::mutate("Prediction Difference" = Cost - `Presumed cost`,
                 "Prediction % Difference" = (Cost - `Presumed cost`)/Cost)
 
+tmp <- gmapsdistance::gmapsdistance(origin = startLocation,
+              destination = "Greenstreet Gardens, Alexandria, VA",
+              mode = "driving")
+tmp$Distance |> measurements::conv_unit("m","mi")
+tmp$Time |> measurements::conv_unit("s","min")
 ```
+
 
