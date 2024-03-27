@@ -15,7 +15,7 @@ output:
 # this block loads required packages and some custom functions. 
 
 cran_pacs <- c("librarian", "pak", "rlang", "pkgbuild","rmarkdown", "BiocManager", "tidyselect", "tidyverse", "magrittr", "stats", "measurements", "knitr", "foreach", "doParallel", "parallel", "fs", "janitor", "readxl", "writexl","fuzzyjoin", "plyr", "stringdist", "multidplyr", "lubridate", "readr", "tidyr", "forcats", "purrr", "stringr","gmapsdistance") 
-dev_pacs <- c() ## "aperium/rutil" 
+dev_pacs <- c("sysilviakim/Kmisc") ## "aperium/rutil" 
 bioc_pacs <- c("Biostrings")
 py_pacs <- c("camelot-py")
 
@@ -151,8 +151,8 @@ myGoogleMapsKey <- "/Greenstreet Growers/TeamSite - Documents/Users/Daniel/Proje
 ## get table column names and table human-readable names
 ord_hist_ln_names <- fs::path(CP_path, "VI_PS_ORD_HIST_LIN-names.txt") |> 
   readr::read_csv(col_names = c("list")) |>
-  mutate(key = list %>% str_squish() %>% str_extract("(?<=\\()[:graph:]*(?=\\)$)") %>% str_trim(),
-         value = list %>% str_squish() %>% str_extract(".*(?=\\([:graph:]*$)") %>% str_trim()) %>%
+  mutate(key = list %>% str_squish() %>% str_extract("((?<=\\()[:graph:]*(?=\\)$))|((?<=^!)[:graph:]*(?=!$))") %>% str_trim(),
+         value = list %>% str_squish() %>% str_extract("(.*(?=\\([:graph:]*$))|((?<=^!)[:graph:]*(?=!$))") %>% str_trim()) %>%
   select(-list) %>%
   unique() %>%
   na.omit()
@@ -160,14 +160,15 @@ ord_hist_ln_names <- fs::path(CP_path, "VI_PS_ORD_HIST_LIN-names.txt") |>
 ## get table column names and table human-readable names
 ord_hist_names <- fs::path(CP_path, "VI_PS_ORD_HIST-names.txt") |> 
   readr::read_csv(col_names = c("list")) |>
-  mutate(key = list %>% str_squish() %>% str_extract("(?<=\\()[:graph:]*(?=\\)$)") %>% str_trim(),
-         value = list %>% str_squish() %>% str_extract(".*(?=\\([:graph:]*$)") %>% str_trim()) %>%
+  mutate(key = list %>% str_squish() %>% str_extract("((?<=\\()[:graph:]*(?=\\)$))|((?<=^!)[:graph:]*(?=!$))") %>% str_trim(),
+         value = list %>% str_squish() %>% str_extract("(.*(?=\\([:graph:]*$))|((?<=^!)[:graph:]*(?=!$))") %>% str_trim()) %>%
   select(-list) %>%
   unique() %>%
   na.omit()
 
 shared_fields <- dplyr::inner_join(ord_hist_ln_names,ord_hist_names) |>
-  dplyr::summarise(key = min(key), .by = "value")
+  dplyr::summarise(key = min(key), .by = "value") |>
+  filter(!(key %in% c("USER_BatchID","USER_Status","USER_PickStatus")))
 
 ```
 
@@ -200,7 +201,7 @@ select_cols_y <- c("Business date", "Document", "Event number", "Customer #", "N
   match(.,ord_hist_names$value) %>% 
   foreach(i=.) %dopar% ord_hist_names$key[i] %>% 
   unlist() |> 
-  c("SHIP_ADRS_1","SHIP_ADRS_2","SHIP_CITY","SHIP_STATE","SHIP_ZIP_COD","SHIP_CNTRY") |>
+  c("SHIP_ADRS_1","SHIP_ADRS_2","SHIP_CITY","SHIP_STATE","SHIP_ZIP_COD","SHIP_CNTRY","SHIP_DAT","STK_LOC_ID","ORD_SUB_TOT","ORD_TOT_EST_COST","ORD_TOT","ORD_AMT_DUE","ORD_TOT_CUBE","DOC_STAT","LST_DOC_REL_DT","PROF_DAT_1") |>
   c(match_cols_y, shared_fields$key) |>
   str_unique()
 order <- ord_hist_file |> 
@@ -231,13 +232,37 @@ startLocation = "Greenstreet Growers, Lothian, MD 20711"
 
 ord_hist_joined <- left_join(ord_hist_ln_data, ord_hist_data) |>
   dplyr::mutate("Prediction Difference" = Cost - `Presumed cost`,
-                "Prediction % Difference" = (Cost - `Presumed cost`)/Cost)
+                "Prediction % Difference" = (Cost - `Presumed cost`)/Cost,
+                "endLoc" = Kmisc::paste_na(`Address 1`,`Address 2`,City,State,`Zip code`,Country) |> str_squish() |> na_if(""),
+                "startLoc" = startLocation)
 
-tmp <- gmapsdistance::gmapsdistance(origin = startLocation,
-              destination = "Greenstreet Gardens, Alexandria, VA",
-              mode = "driving")
-tmp$Distance |> measurements::conv_unit("m","mi")
-tmp$Time |> measurements::conv_unit("s","min")
+
+# 
+# tmp <- gmapsdistance::gmapsdistance(origin = startLocation,
+#               destination = "Greenstreet Gardens, Alexandria, VA",
+#               mode = "driving") |> as_tibble()
+# tmp$Distance |> measurements::conv_unit("m","mi")
+# tmp$Time |> measurements::conv_unit("s","min")
+# 
+# gmapsdistance::gmapsdistance(origin = startLocation,
+#                              destination = ord_hist_joined$endLoc |> na.omit() |> unique(),
+#                              mode = "driving",
+#                              combinations = "all")
+# 
+# ord_hist_joined$`Business date` |> as.numeric()
+
+
+ord_hist_distances <- ord_hist_joined |>
+  filter(`Business date` >= ymd("20240301")) |>
+  rowwise() |>
+  dplyr::mutate(gmapsdistance::gmapsdistance(origin = startLoc,
+                                             destination = endLoc,
+                                             mode = "driving",
+                                             combinations = "pairwise",
+                                             key = myGoogleMapsKey) |> as_tibble(),
+                Distance = Distance |> measurements::conv_unit("m","mi"),
+                Time = Time |> measurements::conv_unit("s","min"))
+
 ```
 
 
