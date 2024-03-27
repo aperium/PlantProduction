@@ -160,8 +160,9 @@ ord_hist_names <- fs::path(CP_path, "VI_PS_ORD_HIST-names.txt") |>
   unique() %>%
   na.omit()
 
+shared_fields <- dplyr::inner_join(ord_hist_ln_names,ord_hist_names) |>
+  dplyr::summarise(key = min(key), .by = "value")
 
-shared_fields <- dplyr::inner_join(ord_hist_ln_names,ord_hist_names)
 ```
 
 
@@ -177,7 +178,6 @@ select_cols_x <- c("Business date", "Presumed cost", "Cost", "Document", "Event 
   foreach(i=.) %dopar% ord_hist_ln_names$key[i] %>% 
   unlist() |>
   c(match_cols_x, shared_fields$key) |>
-  setdiff(c("BUS_DAT_EXT","DOC_ID_EXT")) |>
   str_unique()
 order <- ord_hist_ln_file |> fs::path_ext_remove() |> fs::path_file() |> stringr::str_extract("[:digit:]*$") |> str_pad(8,"right",pad="1") |> ymd() |> order()
 ord_hist_ln_data <- foreach::foreach(i=order, .combine = \(x,y) dplyr::rows_upsert(x,y,by = match_cols_x), .packages=c("tidyverse","doParallel")) %dopar%     {read_csv(ord_hist_ln_file[i], col_names = TRUE, guess_max = as.integer(.Machine$integer.max/100), num_threads = n_cores-1, col_select=select_cols_x)} %>%
@@ -196,7 +196,6 @@ select_cols_y <- c("Business date", "Document", "Event number", "Customer #", "N
   unlist() |> 
   c("SHIP_ADRS_1","SHIP_ADRS_2","SHIP_CITY","SHIP_STATE","SHIP_ZIP_COD","SHIP_CNTRY") |>
   c(match_cols_y, shared_fields$key) |>
-  setdiff(c("BUS_DAT_EXT","DOC_ID_EXT")) |>
   str_unique()
 order <- ord_hist_file |> 
   fs::path_ext_remove() |> 
@@ -218,7 +217,9 @@ stopImplicitCluster()
 
 ```{r merge_order_hist}
 
-
+ord_hist_joined <- left_join(ord_hist_ln_data, ord_hist_data) |>
+  dplyr::mutate("Prediction Difference" = Cost - `Presumed cost`,
+                "Prediction % Difference" = (Cost - `Presumed cost`)/Cost)
 
 ```
 
