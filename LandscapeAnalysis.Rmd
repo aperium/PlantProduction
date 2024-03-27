@@ -213,14 +213,12 @@ ord_hist_data <- foreach::foreach(i=order, .combine = \(x,y) dplyr::rows_upsert(
                 Note = Note |> str_replace_all("\\\\20"," ")|> str_replace_all("\\\\0D\\\\0A","\n")) |>
   dplyr::arrange(desc(`Business date`))
 
-
-## debugging
-tmp <- ord_hist_names |> filter(key %in% select_cols_y)
-
 stopImplicitCluster()
 ```
 
 ```{r merge_order_hist}
+
+
 
 ```
 
