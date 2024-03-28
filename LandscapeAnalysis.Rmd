@@ -179,18 +179,29 @@ registerDoParallel(cores=n_cores-1)
 ## get order history line data 
 x <- ord_hist_ln_names$value
 names(x) <- ord_hist_ln_names$key
-match_cols_x <- c("TKT_NO", "SEQ_NO","EVENT_NO","DOC_ID") |> str_unique()
-select_cols_x <- c("Business date", "Presumed cost", "Cost", "Document", "Event number", "Document ID", "Item number", "Description", "Item type", "Price", "Quantity shipped", "Gross ext prc", "Sequence #") %>% 
+match_cols_x <- c("TKT_NO","SEQ_NO", "EVENT_NO","DOC_ID") |> str_unique()
+select_cols_x <- c("Business date", "Presumed cost", "Cost", "Document", "Event number", "Document ID", "Item number", "Description", "Item type", "Price", "Quantity shipped", "Gross ext prc") %>% 
   match(.,ord_hist_ln_names$value) %>% 
   foreach(i=.) %dopar% ord_hist_ln_names$key[i] %>% 
   unlist() |>
   c(match_cols_x, shared_fields$key) |>
   str_unique()
-order <- ord_hist_ln_file |> fs::path_ext_remove() |> fs::path_file() |> stringr::str_extract("[:digit:]*$") |> str_pad(8,"right",pad="1") |> ymd() |> order()
+order <- ord_hist_ln_file |> 
+  fs::path_ext_remove() |> 
+  fs::path_file() |> 
+  stringr::str_extract("[:digit:]*$") |> 
+  str_pad(8,"right",pad="1") |> 
+  ymd() |> 
+  order()
 ord_hist_ln_data <- foreach::foreach(i=order, .combine = \(x,y) dplyr::rows_upsert(x,y,by = match_cols_x), .packages=c("tidyverse","doParallel")) %dopar%     {read_csv(ord_hist_ln_file[i], col_names = TRUE, guess_max = as.integer(.Machine$integer.max/100), num_threads = n_cores-1, col_select=select_cols_x)} %>%
   plyr::rename(.,replace=x) |>
-  dplyr::filter(str_equal(`Item number`,"G-105828")) |>
-  dplyr::mutate(`Business date` = `Business date` |> ymd_hms()) |>
+  # dplyr::filter(str_equal(`Item number`,"G-105828")) |>
+  dplyr::mutate(across(c(`Business date`),ymd_hms),
+                across(c(`Document ID`,`Sequence #`,Store,`Ship-from location`,`Price-from location`),as.character),
+                isLabor = str_equal(`Item number`,"G-105828")) |>
+  dplyr::summarise(across(where(is.numeric),sum),
+                   across(where(is_character),\(x) {x |> str_unique() |> list()}),
+                   .by = c(all_of(c("isLabor","Document", "Event number","Document ID")),where(is.POSIXct))) |>
   dplyr::arrange(desc(`Business date`))
 
 ## get order history data
@@ -215,13 +226,14 @@ ord_hist_data <- foreach::foreach(i=order, .combine = \(x,y) dplyr::rows_upsert(
   read_csv(ord_hist_file[i], col_names = TRUE, guess_max = as.integer(.Machine$integer.max/100), num_threads = n_cores-1, col_select=select_cols_y)
   } %>%
   plyr::rename(.,replace=y) |>
-  dplyr::mutate(`Business date` = `Business date` |> ymd_hms(),
-                Note = Note |> 
+  dplyr::mutate(Note = Note |> 
                   str_replace_all("\\\\20"," ") |> 
                   str_replace_all("\\\\0D\\\\0A","\n") |> 
                   str_replace_all("\\\\27","'") |> 
                   str_replace_all("\\\\22","\"") |> 
-                  str_replace_all("\\\\26","&")) |>
+                  str_replace_all("\\\\26","&"),
+                across(c(`Business date`,`Ship Date`,`Delivery Date`,`Last release date`,`Posting date`),ymd_hms),
+                across(c(`Ship-from location`,`Document ID`,Store,`Price-from location`),as.character)) |>
   dplyr::arrange(desc(`Business date`))
 
 stopImplicitCluster()
