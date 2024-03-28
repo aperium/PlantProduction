@@ -121,6 +121,10 @@ column_not_empty = function(x) not(all(check_empty(x)))
 
 remove_empties = function(x) x %>% dplyr::select(where(column_not_empty)) %>% janitor::remove_empty()
 
+# doParallell_isClusterRegistered <- function () {
+#   exists(".revoDoParCluster", where = .options) && !is.null(.options[[".revoDoParCluster"]])
+# }
+
 
 ```
 
@@ -174,10 +178,16 @@ shared_fields <- dplyr::inner_join(ord_hist_ln_names,ord_hist_names) |>
 
 
 ```{r CP-order-history-import}
-registerDoParallel(cores=n_cores-1)
 
-cluster <- new_cluster(n_cores-1)
-cluster_library(cluster, installed_req_pkgs)
+if(is_null(getDefaultCluster())) {
+  makeCluster(n_cores-1) |> setDefaultCluster()
+  registerDoParallel(getDefaultCluster())
+}
+
+if(!exists("dCluster")) {
+  dCluster <- new_cluster(n_cores-1)
+  cluster_library(dCluster, installed_req_pkgs)
+}
 
 ## get order history line data 
 x <- ord_hist_ln_names$value
@@ -203,7 +213,7 @@ ord_hist_ln_data <- foreach::foreach(i=order, .combine = \(x,y) dplyr::rows_upse
                 across(c(`Document ID`,`Sequence #`,Store,`Ship-from location`,`Price-from location`),as.character),
                 isLabor = str_equal(`Item number`,"G-105828")) |>
   group_by(`isLabor`,`Document`,`Event number`,`Document ID`,`Business date`,`Posting date`) |>
-  partition(cluster) |>
+  partition(dCluster) |>
   dplyr::summarise(across(where(is.numeric),sum),
                    across(where(is_character),\(x) {x |> str_unique() |> list()})) |>
                    # .by = c(all_of(c("isLabor","Document", "Event number","Document ID")),where(is.POSIXct))) |>
@@ -243,9 +253,7 @@ ord_hist_data <- foreach::foreach(i=order, .combine = \(x,y) dplyr::rows_upsert(
   dplyr::arrange(desc(`Business date`))
 
 
-rm(cluster)
 
-stopImplicitCluster()
 ```
 
 ```{r merge_order_hist}
@@ -286,4 +294,11 @@ ord_hist_distances <- ord_hist_joined |>
 
 ```
 
+```{r terminateClusters, eval=FALSE}
+# dplyr cluster
+if(exists("dCluster")) rm(dCluster)
+
+# doParallel cluster
+if(!is_null(getDefaultCluster())) stopCluster(getDefaultCluster())
+```
 
