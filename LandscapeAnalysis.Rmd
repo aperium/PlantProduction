@@ -276,21 +276,7 @@ ord_hist_joined <- left_join(ord_hist_ln_data, ord_hist_data) |>
                   str_remove_all(regex("del(iver)?[:punct:]?[:space:]to([:space:]y(ar)?d)?[:punct:]?[:space:]?", ignore_case = TRUE)) |>
                   str_replace(regex("(Customer Pick[:space:]?up[:space:]?)+", ignore_case = TRUE),startLoc))
 
-# 
-# tmp <- gmapsdistance::gmapsdistance(origin = startLocation,
-#               destination = "Greenstreet Gardens, Alexandria, VA",
-#               mode = "driving") |> as_tibble()
-# tmp$Distance |> measurements::conv_unit("m","mi")
-# tmp$Time |> measurements::conv_unit("s","min")
-# 
-# gmapsdistance::gmapsdistance(origin = startLocation,
-#                              destination = ord_hist_joined$endLoc |> na.omit() |> unique(),
-#                              mode = "driving",
-#                              combinations = "all")
-# 
-# ord_hist_joined$`Business date` |> as.numeric()
-
-## These ifs check to see if the addresses have changed at all before bothering google. If there are changes, then google is querried. 
+## These ifs check to see if the addresses have changed at all before bothering Google. If there are changes, then Google is queried. 
 if(!exists("ord_hist_joined_hash")) ord_hist_joined_hash <- NA
 ord_hist_joined_hash[1] <- ord_hist_joined |>
   select(startLoc,endLoc) |>
@@ -313,21 +299,6 @@ if(is.na(ord_hist_joined_hash[2])|!equals(ord_hist_joined_hash[1],ord_hist_joine
                   Time = Time |> measurements::conv_unit("s","min"))
   ord_hist_joined_hash[2] <- ord_hist_joined_hash[1]
 }
-
-# ord_distances <- ord_hist_joined |>
-#   # pick(startLoc,endLoc)
-#   select(startLoc,endLoc) |>
-#   na.omit() |>
-#   distinct() |>
-#   rowwise() |>
-#   dplyr::mutate(gmapsdistance::gmapsdistance(origin = startLoc,
-#                                              destination = endLoc,
-#                                              mode = "driving",
-#                                              combinations = "pairwise",
-#                                              key = myGoogleMapsKey) |> as_tibble(),
-#                 Distance = Distance |> measurements::conv_unit("m","mi"),
-#                 Time = Time |> measurements::conv_unit("s","min"))
-
 
 ord_hist_distances <- ord_hist_joined |>
   left_join(ord_distances |> select(-Status))
