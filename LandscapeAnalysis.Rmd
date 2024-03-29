@@ -221,6 +221,8 @@ ord_hist_ln_data <- foreach::foreach(i=order_x, .combine = \(x,y) dplyr::rows_up
   collect() |>
   ungroup() |>
   dplyr::mutate(across(where(\(x) {is_list(x) & max(lengths(x))<=1}),unlist)) |>
+  # Filter for order tickest that have a labor line
+  # dplyr::filter(Document %in% pick(Document, )) |>
   dplyr::arrange(desc(`Business date`))
 
 ## get order history data
