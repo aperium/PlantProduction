@@ -215,7 +215,8 @@ ord_hist_ln_data <- foreach::foreach(i=order, .combine = \(x,y) dplyr::rows_upse
   group_by(`isLabor`,`Document`,`Event number`,`Document ID`,`Business date`,`Posting date`) |>
   partition(dCluster) |>
   dplyr::summarise(across(where(is.numeric),sum),
-                   across(where(is_character),\(x) {x |> str_unique() |> list()})) |>
+                   across(where(is_character),\(x) {x |> str_unique() |> list()}),
+                   across(where(is_list),\(x) {if_else(lengths(x) |> max() == 1, unlist(x),x)})) |>
                    # .by = c(all_of(c("isLabor","Document", "Event number","Document ID")),where(is.POSIXct))) |>
   collect() |>
   dplyr::arrange(desc(`Business date`))
