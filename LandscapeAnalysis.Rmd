@@ -219,6 +219,7 @@ ord_hist_ln_data <- foreach::foreach(i=order_x, .combine = \(x,y) dplyr::rows_up
                    across(where(is_character),\(x) {x |> str_unique() |> list()})) |>
                    # .by = c(all_of(c("isLabor","Document", "Event number","Document ID")),where(is.POSIXct))) |>
   collect() |>
+  ungroup() |>
   dplyr::mutate(across(where(\(x) {is_list(x) & max(lengths(x))<=1}),unlist)) |>
   dplyr::arrange(desc(`Business date`))
 
@@ -259,14 +260,21 @@ ord_hist_data <- foreach::foreach(i=order_y, .combine = \(x,y) dplyr::rows_upser
 ```
 
 ```{r merge_order_hist}
-startLocation = "Greenstreet Growers, Lothian, MD 20711"
+location_20 <- "Greenstreet Growers, 391 West Bay Front Road, Lothian, MD 20711"
+location_40 <- "Greenstreet Gardens, 1721 West Braddock Road, Alexandria, VA 22302"
 
 ord_hist_joined <- left_join(ord_hist_ln_data, ord_hist_data) |>
   dplyr::mutate("Prediction Difference" = Cost - `Presumed cost`,
                 "Prediction % Difference" = (Cost - `Presumed cost`)/Cost,
-                "endLoc" = Kmisc::paste_na(`Address 1`,`Address 2`,City,State,`Zip code`,Country) |> str_squish() |> na_if(""),
-                "startLoc" = startLocation)
-
+                "startLoc" = case_match(`Ship-from location`,
+                                        c(10,20,60,70,80) |> as.character() ~ location_20,
+                                        c(40) |> as.character() ~ location_40,
+                                        .default = location_20),
+                "endLoc" = Kmisc::paste_na(`Address 1`,`Address 2`,City,State,`Zip code`,Country) |> 
+                  str_squish() |> 
+                  na_if("") |> 
+                  str_remove_all(regex("del(iver)?[:punct:]?[:space:]to([:space:]y(ar)?d)?[:punct:]?[:space:]?", ignore_case = TRUE)) |>
+                  str_replace(regex("(Customer Pick[:space:]?up[:space:]?)+", ignore_case = TRUE),startLoc))
 
 # 
 # tmp <- gmapsdistance::gmapsdistance(origin = startLocation,
@@ -282,17 +290,47 @@ ord_hist_joined <- left_join(ord_hist_ln_data, ord_hist_data) |>
 # 
 # ord_hist_joined$`Business date` |> as.numeric()
 
+## These ifs check to see if the addresses have changed at all before bothering google. If there are changes, then google is querried. 
+if(!exists("ord_hist_joined_hash")) ord_hist_joined_hash <- NA
+ord_hist_joined_hash[1] <- ord_hist_joined |>
+  select(startLoc,endLoc) |>
+  na.omit() |>
+  distinct() |>
+  hash()
+if(is.na(ord_hist_joined_hash[2])|!equals(ord_hist_joined_hash[1],ord_hist_joined_hash[2])) {
+  ord_distances <- ord_hist_joined |>
+    # pick(startLoc,endLoc)
+    select(startLoc,endLoc) |>
+    na.omit() |>
+    distinct() |>
+    rowwise() |>
+    dplyr::mutate(gmapsdistance::gmapsdistance(origin = startLoc,
+                                               destination = endLoc,
+                                               mode = "driving",
+                                               combinations = "pairwise",
+                                               key = myGoogleMapsKey) |> as_tibble(),
+                  Distance = Distance |> measurements::conv_unit("m","mi"),
+                  Time = Time |> measurements::conv_unit("s","min"))
+  ord_hist_joined_hash[2] <- ord_hist_joined_hash[1]
+}
+
+# ord_distances <- ord_hist_joined |>
+#   # pick(startLoc,endLoc)
+#   select(startLoc,endLoc) |>
+#   na.omit() |>
+#   distinct() |>
+#   rowwise() |>
+#   dplyr::mutate(gmapsdistance::gmapsdistance(origin = startLoc,
+#                                              destination = endLoc,
+#                                              mode = "driving",
+#                                              combinations = "pairwise",
+#                                              key = myGoogleMapsKey) |> as_tibble(),
+#                 Distance = Distance |> measurements::conv_unit("m","mi"),
+#                 Time = Time |> measurements::conv_unit("s","min"))
+
 
 ord_hist_distances <- ord_hist_joined |>
-  # filter(`Business date` >= ymd("20240301", tz = "America/New_York")) |>
-  rowwise() |>
-  dplyr::mutate(gmapsdistance::gmapsdistance(origin = startLoc,
-                                             destination = endLoc,
-                                             mode = "driving",
-                                             combinations = "pairwise",
-                                             key = myGoogleMapsKey) |> as_tibble(),
-                Distance = Distance |> measurements::conv_unit("m","mi"),
-                Time = Time |> measurements::conv_unit("s","min"))
+  left_join(ord_distances |> select(-Status))
 
 ```
 
