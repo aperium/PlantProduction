@@ -199,26 +199,27 @@ select_cols_x <- c("Business date", "Presumed cost", "Cost", "Document", "Event 
   unlist() |>
   c(match_cols_x, shared_fields$key) |>
   str_unique()
-order <- ord_hist_ln_file |> 
+order_x <- ord_hist_ln_file |> 
   fs::path_ext_remove() |> 
   fs::path_file() |> 
   stringr::str_extract("[:digit:]*$") |> 
   str_pad(8,"right",pad="1") |> 
   ymd() |> 
-  order()
-ord_hist_ln_data <- foreach::foreach(i=order, .combine = \(x,y) dplyr::rows_upsert(x,y,by = match_cols_x), .packages=c("tidyverse","doParallel")) %dopar%     {read_csv(ord_hist_ln_file[i], col_names = TRUE, guess_max = as.integer(.Machine$integer.max/100), num_threads = n_cores-1, col_select=select_cols_x)} %>%
+  base::order()
+ord_hist_ln_data <- foreach::foreach(i=order_x, .combine = \(x,y) dplyr::rows_upsert(x,y,by = match_cols_x), .packages=c("tidyverse","doParallel")) %dopar% {read_csv(ord_hist_ln_file[i], col_names = TRUE, guess_max = as.integer(.Machine$integer.max/100), num_threads = n_cores-1, col_select=select_cols_x)} %>%
   plyr::rename(.,replace=x) |>
   # dplyr::filter(str_equal(`Item number`,"G-105828")) |>
-  dplyr::mutate(across(c(`Business date`,`Posting date`),ymd_hms),
+  dplyr::mutate(across(c(`Business date`,`Posting date`), ~ ymd_hms(.x, tz = "America/New_York", quiet = TRUE, truncated = 3)),
                 across(c(`Document ID`,`Sequence #`,Store,`Ship-from location`,`Price-from location`),as.character),
                 isLabor = str_equal(`Item number`,"G-105828")) |>
-  group_by(`isLabor`,`Document`,`Event number`,`Document ID`,`Business date`,`Posting date`) |>
+  group_by(`isLabor`,`Document`,`Event number`,`Document ID`,`Business date`,`Posting date`,`Item type`,`Ship-from location`) |>
   partition(dCluster) |>
+  filter(`Business date` >= ymd("20240301", tz = "America/New_York")) |>
   dplyr::summarise(across(where(is.numeric),sum),
-                   across(where(is_character),\(x) {x |> str_unique() |> list()}),
-                   across(where(is_list),\(x) {if_else(lengths(x) |> max() == 1, unlist(x),x)})) |>
+                   across(where(is_character),\(x) {x |> str_unique() |> list()})) |>
                    # .by = c(all_of(c("isLabor","Document", "Event number","Document ID")),where(is.POSIXct))) |>
   collect() |>
+  dplyr::mutate(across(where(\(x) {is_list(x) & max(lengths(x))<=1}),unlist)) |>
   dplyr::arrange(desc(`Business date`))
 
 ## get order history data
@@ -232,14 +233,14 @@ select_cols_y <- c("Business date", "Document", "Event number", "Customer #", "N
   c("SHIP_ADRS_1","SHIP_ADRS_2","SHIP_CITY","SHIP_STATE","SHIP_ZIP_COD","SHIP_CNTRY","SHIP_DAT","STK_LOC_ID","ORD_SUB_TOT","ORD_TOT_EST_COST","ORD_TOT","ORD_AMT_DUE","ORD_TOT_CUBE","DOC_STAT","LST_DOC_REL_DT","PROF_DAT_1") |>
   c(match_cols_y, shared_fields$key) |>
   str_unique()
-order <- ord_hist_file |> 
+order_y <- ord_hist_file |> 
   fs::path_ext_remove() |> 
   fs::path_file() |> 
   stringr::str_extract("[:digit:]*$") |> 
   str_pad(8,"right",pad="1") |> 
   ymd() |> 
-  order()
-ord_hist_data <- foreach::foreach(i=order, .combine = \(x,y) dplyr::rows_upsert(x,y,by = match_cols_y), .packages=c("tidyverse","doParallel")) %dopar% {
+  base::order()
+ord_hist_data <- foreach::foreach(i=order_y, .combine = \(x,y) dplyr::rows_upsert(x,y,by = match_cols_y), .packages=c("tidyverse","doParallel")) %dopar% {
   read_csv(ord_hist_file[i], col_names = TRUE, guess_max = as.integer(.Machine$integer.max/100), num_threads = n_cores-1, col_select=select_cols_y)
   } %>%
   plyr::rename(.,replace=y) |>
@@ -249,7 +250,7 @@ ord_hist_data <- foreach::foreach(i=order, .combine = \(x,y) dplyr::rows_upsert(
                   str_replace_all("\\\\27","'") |> 
                   str_replace_all("\\\\22","\"") |> 
                   str_replace_all("\\\\26","&"),
-                across(c(`Business date`,`Ship Date`,`Delivery Date`,`Last release date`,`Posting date`),ymd_hms),
+                across(c(`Business date`,`Ship Date`,`Delivery Date`,`Last release date`,`Posting date`), ~ ymd_hms(.x, tz = "America/New_York", quiet = TRUE, truncated = 3)),
                 across(c(`Ship-from location`,`Document ID`,Store,`Price-from location`),as.character)) |>
   dplyr::arrange(desc(`Business date`))
 
@@ -283,7 +284,7 @@ ord_hist_joined <- left_join(ord_hist_ln_data, ord_hist_data) |>
 
 
 ord_hist_distances <- ord_hist_joined |>
-  filter(`Business date` >= ymd("20240301")) |>
+  # filter(`Business date` >= ymd("20240301", tz = "America/New_York")) |>
   rowwise() |>
   dplyr::mutate(gmapsdistance::gmapsdistance(origin = startLoc,
                                              destination = endLoc,
