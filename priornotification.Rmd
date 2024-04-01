@@ -180,6 +180,14 @@ google_get_address <- function(query = NULL) {
 
 ```
 
+```{r otherfuns}
+
+mid_date <- function(d1, d2) {
+  d <- c(d1,d2) |> sort()
+  d[1]+((d[2]-d[1])/2)
+}
+
+```
 
 
 ## Basic steps
@@ -231,7 +239,9 @@ tracking_df <- tracking_path %>% read_xlsx_flex() %>%
   distinct() %>%
   mutate("Receiving City" = `Receiving Location` %>% str_squish() %>% str_remove("[:punct:]?[:space:][:alpha:]{2}$"),
          "Receiving State" = `Receiving Location` %>% str_squish() %>% str_remove(".*[:space:](?=[:alpha:]{2}$)"),
-         "Receiving ZIP" = rlang::na_chr) %>%
+         "Receiving ZIP" = rlang::na_chr) |>
+  dplyr::summarise(.by = c("Customer Name","Comments","Receiving City","Receiving State","Ship Week"),
+                   across(where(is.POSIXct),))
          # "Receiving ZIP" = rutil::google_get_address(paste(`Customer Name`,Comments,`Receiving City`,`Receiving State`)) |> str_squish() |> str_extract("[:digit:]{5}(-[:digit:]{4})?$")
   # mutate("Receiving Zip" = unite(data=.,col="zip",all_of(c("Customer Name","Comments","Receiving City","Receiving State")), sep = " ", remove = FALSE, na.rm = TRUE) |> pull(var=zip) |> google_get_address() |> str_squish() |> str_extract("[:digit:]{5}(-[:digit:]{4})?$"))|>
   dplyr::rows_patch(y = unite(data=.,col="addressq",all_of(c("Customer Name","Comments","Receiving City","Receiving State")), sep = " ", remove = FALSE, na.rm = TRUE) |>
