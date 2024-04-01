@@ -221,7 +221,7 @@ orders_df <- orders_path %>% read_xlsx_flex() %>%
          .before = contains("quantity")) |>
   select(-"Material Description")
 
-# TODO use dplyr::rows_patch() to update all empty address fields with google.
+#using dplyr::rows_patch() to update all empty address fields with google.
 
 tracking_df <- tracking_path %>% read_xlsx_flex() %>%
   left_join(tracking_path %>% read_xlsx_flex() %>% dplyr::select("Ship-To...","Drop Point Location") %>% dplyr::filter(!is.na(`Drop Point Location`)) %>% dplyr::rename("Receiving Location" = "Drop Point Location") %>% distinct()) %>%
