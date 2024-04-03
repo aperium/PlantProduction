@@ -318,7 +318,7 @@ plants_joined <- full_join(e_combined, b_orders, by=alignment) %>%
 
 ```
 
-```{r filter}
+```{r filter, eval=FALSE}
 
 if(!exists("dCluster")) {
   dCluster <- new_cluster(n_cores-1)
