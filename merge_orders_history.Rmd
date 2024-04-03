@@ -62,16 +62,18 @@ n_cores <- parallel::detectCores()
 # registerDoParallel(cores=n_cores)
 # stopImplicitCluster()
 
-if(is_null(getDefaultCluster())) {
-  makeCluster(n_cores-1) |> setDefaultCluster()
-  registerDoParallel(getDefaultCluster())
-}
 
-if(!exists("dCluster")) {
-  dCluster <- new_cluster(n_cores-1)
-  cluster_library_quiety <- purrr::quietly(cluster_library)
-  cluster_library_quiety(dCluster, installed_req_pkgs)
-}
+
+# doParallel cluster
+if(!is_null(getDefaultCluster())) stopCluster(getDefaultCluster())
+makeCluster(n_cores-1) |> setDefaultCluster()
+registerDoParallel(getDefaultCluster())
+
+# dplyr cluster
+if(exists("dCluster")) rm(dCluster)
+dCluster <- new_cluster(n_cores-1)
+cluster_library_quiety <- purrr::quietly(cluster_library)
+cluster_library_quiety(dCluster, installed_req_pkgs)
 
 ```
 
@@ -202,6 +204,22 @@ name_match <- function(x,y) {
   return(out2)
 }
 
+# parses file names in a series within a directory to produce an order
+order_files <- function(paths, parseFun = identity, baseName = NA) {
+  if(length(paths) <= 1) return(paths)
+  paths <- paths |> 
+    fs::path_file() |>
+    fs::path_ext_remove()  
+  start <- if(is.na(baseName)) {
+    alignment <- Biostrings::pairwiseAlignment(paths[2:length(paths)], paths[1])
+    alignment@subject@mismatch |> unlist() |> min() 
+  } else {
+    (baseName |> stringr::str_length()) + 1
+  }
+  ids <- paths |> stringr::str_sub(start)
+  ids |> parseFun() |> 
+  base::order()
+}
 
 ```
 
@@ -225,7 +243,7 @@ e_delivered <- plants_dir |> fs::path("Express Seed export","express_shipped_ord
   janitor::remove_empty()
 
 b_files <- plants_dir |> fs::path("Ball export") |> fs::dir_ls() |> fs::path_filter(regex = "order_download_.*\\.xlsx")
-b_orders <- foreach::foreach(i=order(b_files), .combine = \(x,y) dplyr::rows_upsert(x,y,by = c("Order Number", "Order Line"))) %dopar% { read_xlsx_flex(b_files[i], guess_max = as.integer(.Machine$integer.max/100)) |>
+b_orders <- foreach::foreach(i=order_files(b_files, baseName = "order_download_", parseFun = ymd_hms), .combine = \(x,y) dplyr::rows_upsert(x,y,by = c("Order Number", "Order Line"))) %dopar% { read_xlsx_flex(b_files[i], guess_max = as.integer(.Machine$integer.max/100)) |>
   dplyr::mutate(vendor = "Ball",
          "Order Number" = `Order Number` |> as.character(),
          "Sales Order Date" = `Sales Order Date` |> lubridate::ymd(),
@@ -251,7 +269,7 @@ b_orders <- foreach::foreach(i=order(b_files), .combine = \(x,y) dplyr::rows_ups
 # todo fix order function
 mtag_files <- tags_dir |> fs::path("MasterTag") |> fs::dir_ls() |> fs::path_filter(regex = "GREENSTREET_GROWERS_INC_Order Export_.*\\.xlsx")
 # registerDoParallel(cores=n_cores-1)
-mtag_orders <- foreach::foreach(i=order(mtag_files), .combine = \(x,y) dplyr::rows_upsert(x,y,by = c("MT Sales Order #", "MT ID")), .packages = c("foreach")) %dopar% { 
+mtag_orders <- foreach::foreach(i=order_files(mtag_files, baseName = "GREENSTREET_GROWERS_INC_Order Export_", parseFun = mdy), .combine = \(x,y) dplyr::rows_upsert(x,y,by = c("MT Sales Order #", "MT ID")), .packages = c("foreach")) %dopar% { 
   foreach(j=c(2,1), .combine = dplyr::left_join) %dopar% {
     read_xlsx_flex(path = mtag_files[i], sheet = j, guess_max = as.integer(.Machine$integer.max/100))
   } |> janitor::remove_empty("rows") |>
@@ -291,7 +309,7 @@ if(!exists("dCluster")) {
 
 plants_filtered <- plants_joined |>
   partition(dCluster) |>
-  dplyr::filter((`Ship Date` >= "20240101" |> ymd())&(`Ship Date` < "20240701" |> ymd()),
+  dplyr::filter((`Ship Date` >= "20240101" |> ymd())&(`Ship Date` < "20240801" |> ymd()),
                 Supplier |> str_equal("Kube Pak"),
                 (Description |> str_detect("(^|[:space:])(HE)|(VF)[:space:]"))|(`Customer PO #` |> str_to_lower() |> str_detect("(herb)|(veg)"))) |>
   # dplyr::mutate(Description = Description |> str_remove_all("(?<=([:space:]|^))((herb)|(he)|(vf))(?=([:space:]|$))") |> str_squish()) |>
@@ -337,7 +355,6 @@ aligned %<>%
 
 
 ```
-
 
 
 ```{r export, eval=FALSE}
@@ -395,3 +412,10 @@ averages <- joined |>
 ```
 
 
+```{r terminateClusters, eval=FALSE}
+# dplyr cluster
+if(exists("dCluster")) rm(dCluster)
+
+# doParallel cluster
+if(!is_null(getDefaultCluster())) stopCluster(getDefaultCluster())
+```
