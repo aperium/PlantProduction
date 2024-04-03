@@ -56,30 +56,7 @@ if (length(py_pacs)>0) {
   if (reticulate::py_available(initialize = TRUE)) reticulate::py_install(py_pacs)
 }
 
-# 
-# req_pkgs <- c("rlang", "magrittr", "tidyselect", "tidyverse", "lubridate", "stats", "readr", "measurements", "knitr", "plyr", "tidyr","bibtex","ggpubr","ggplot2", "firatheme", "gt", "ggpmisc", "foreach", "forcats", "doParallel", "parallel", "fs", "purrr", "janitor", "stringdist", "readxl", "writexl", "fuzzyjoin", "pwr", "effectsize", "Biostrings")
-# #
-# # install & load  # this is pretty fast compared to alternatives.
-# find_package_quiet <- function(pkgs) unlist(find.package(pkgs, quiet = TRUE))
-# require_package <- function(pkgs) {
-#   # install.packages(setdiff(pkgs,names(unlist(sapply(pkgs,find_package_quiet)))))
-#   if(!length(find_package_quiet("pak"))) {
-#     install.packages("pak")
-#   }
-#   install_these <- setdiff(pkgs,pak::pkg_status(pkgs)$package)
-#   if(length(install_these)) {
-#     pak::pak_update(stream = "rc")
-#     pak::pak(install_these, upgrade = TRUE, dependencies = TRUE)
-#   }
-# }
-# # require_package(c("pak", "librarian"))
-# require_package(req_pkgs)
-# installed_req_pkgs <- pak::pkg_status(req_pkgs)$package
-# #
-# librarian::shelf(req_pkgs, quiet = TRUE)
-# if((("readxl" %in% req_pkgs)&is_empty(find_package_quiet("readxl")))|(("writexl" %in% req_pkgs)&is_empty(find_package_quiet("writexl")))) librarian::shelf("ycphs/openxlsx") #load openxlsx if read-/write-xl not avail
-# if(((("readxl" %in% req_pkgs)&is_empty(find_package_quiet("readxl")))|(("writexl" %in% req_pkgs)&is_empty(find_package_quiet("writexl"))))&(is_empty(find_package_quiet("openxlsx")))) librarian::shelf("colearendt/xlsx") # load xlsx if openxlsx not avail
-#
+
 ## register cores for foreach
 n_cores <- parallel::detectCores()
 # registerDoParallel(cores=n_cores)
@@ -270,15 +247,6 @@ b_orders <- foreach::foreach(i=order(b_files), .combine = \(x,y) dplyr::rows_ups
   unite(col = "Description", any_of(c("Class","Variety")), sep = " ", remove = FALSE)
 # stopImplicitCluster()
 
-# old ball import method
-# b_orders <- dir_path |> fs::path("Ball export","order_download_20240228110813.xlsx") |>
-#   read_xlsx_flex(guess_max = as.integer(.Machine$integer.max/100)) |>
-#   mutate(vendor = "Ball",
-#          "Order Number" = `Order Number` %>% as.character(),
-#          "Sales Order Date" = `Sales Order Date` %>% ymd(),
-#          "Ship Date" = `Ship Date` %>% ymd(),
-#          "Total Extended Value" = `Total Extended Value` |> as.numeric()) |> 
-#   janitor::remove_empty()
 
 # todo fix order function
 mtag_files <- tags_dir |> fs::path("MasterTag") |> fs::dir_ls() |> fs::path_filter(regex = "GREENSTREET_GROWERS_INC_Order Export_.*\\.xlsx")
@@ -292,16 +260,6 @@ mtag_orders <- foreach::foreach(i=order(mtag_files), .combine = \(x,y) dplyr::ro
     dplyr::mutate(vendor = "MasterTag",
                   "Estimated Ship Date" = `Estimated Ship Date` |> mdy() ) #,
                   # "MT Item Description" = `MT Item Description` |> str_remove_all("[:punct:]|®|™") |> str_squish() |> str_to_lower())
-
-
-# old mtag import method
-# mtag_path <- tags_dir |> fs::path("MasterTag") |> fs::path("GREENSTREET_GROWERS_INC_Order Export_03_06_2024.xlsx")
-# registerDoParallel(cores=n_cores-1)
-# mtag_orders <- foreach(i=c(2,1), .combine = left_join) %dopar% {
-#   read_xlsx_flex(path = mtag_path, sheet = i, guess_max = as.integer(.Machine$integer.max/100))
-# } |> janitor::remove_empty()
-# stopImplicitCluster()
-
 
 
 ```
@@ -362,7 +320,7 @@ tags_filtered <- mtag_orders |>
 
 ```
 
-```{r mtag_join}
+```{r mtag_join, eval = FALSE}
 
 # Biostrings::pairwiseAlignment()
 # 
