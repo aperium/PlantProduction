@@ -242,34 +242,43 @@ e_delivered <- plants_dir |> fs::path("Express Seed export","express_shipped_ord
   read_xlsx_flex(guess_max = as.integer(.Machine$integer.max/100)) |> 
   janitor::remove_empty()
 
-b_files <- plants_dir |> fs::path("Ball export") |> fs::dir_ls() |> fs::path_filter(regex = "order_download_.*\\.xlsx")
-b_orders <- foreach::foreach(i=order_files(b_files, baseName = "order_download_", parseFun = ymd_hms), .combine = \(x,y) dplyr::rows_upsert(x,y,by = c("Order Number", "Order Line"))) %dopar% { read_xlsx_flex(b_files[i], guess_max = as.integer(.Machine$integer.max/100)) |>
-  dplyr::mutate(vendor = "Ball",
-         "Order Number" = `Order Number` |> as.character(),
-         "Sales Order Date" = `Sales Order Date` |> lubridate::ymd(),
-         "Ship Date" = `Ship Date` |> lubridate::ymd(),
-         "Total Extended Value" = `Total Extended Value` |> as.numeric(),
-         "Order Line" = `Order Line` |> stringr::str_extract("[:digit:]*"),
-         "Ship Week" = `Ship Week` |> stringr::str_extract("[:digit:]*[:graph:]?[:digit:]*"),
-         "Case Count" = `Case Count` |> stringr::str_extract("[:digit:]*[:punct:]?[:digit:]*"),
-         "Unit Price" = `Unit Price` |> stringr::str_extract("[:digit:]*[:punct:]?[:digit:]*"),
-         "Royalty" = `Royalty` |> stringr::str_extract("[:digit:]*[:punct:]?[:digit:]*"),
-         "Tags" = `Tags` |> stringr::str_extract("[:digit:]*[:punct:]?[:digit:]*"),
-         "Freight" = `Freight` |> stringr::str_extract("[:digit:]*[:punct:]?[:digit:]*"),
-         "Total Unit Rate" = `Total Unit Rate` |> stringr::str_extract("[:digit:]*[:punct:]?[:digit:]*")) |> 
-  dplyr::select(!any_of(c("Not Used1","Not Used2"))) |>
-  janitor::remove_empty("rows") |>
+e_delivered_baseName <- "express_shipped_orders_"
+e_delivered_files <- plants_dir |> fs::path("Express Seed export") |> fs::dir_ls() |> fs::path_filter(regex = paste0(e_delivered_baseName,".*\\.xlsx"))
+e_delivered <- foreach::foreach(i=order_files(e_delivered_files, baseName = e_delivered_baseName, parseFun = ymd), .combine = \(x,y) dplyr::rows_upsert(x,y,by = c("Order #", "Purchase Order #", "Customer PO #", "Order Date", "Product #", "Supplier", "QTY Ordered"))) %dopar% { 
+  read_xlsx_flex(e_delivered_files[i], guess_max = as.integer(.Machine$integer.max/100)) |>
+    janitor::remove_empty("rows") |>
+    dplyr::distinct() |>
+   dplyr::filter(!is.na(`Order #`))
+  } |> janitor::remove_empty()
+
+b_baseName <- "order_download_"
+b_files <- plants_dir |> fs::path("Ball export") |> fs::dir_ls() |> fs::path_filter(regex = paste0(b_baseName,".*\\.xlsx"))
+b_orders <- foreach::foreach(i=order_files(b_files, baseName = b_baseName, parseFun = ymd_hms), .combine = \(x,y) dplyr::rows_upsert(x,y,by = c("Order Number", "Order Line"))) %dopar% { 
+  read_xlsx_flex(b_files[i], guess_max = as.integer(.Machine$integer.max/100)) |>
+    dplyr::mutate(vendor = "Ball",
+                 "Order Number" = `Order Number` |> as.character(),
+                 "Sales Order Date" = `Sales Order Date` |> lubridate::ymd(),
+                 "Ship Date" = `Ship Date` |> lubridate::ymd(),
+                 "Total Extended Value" = `Total Extended Value` |> as.numeric(),
+                 "Order Line" = `Order Line` |> stringr::str_extract("[:digit:]*"),
+                 "Ship Week" = `Ship Week` |> stringr::str_extract("[:digit:]*[:graph:]?[:digit:]*"),
+                 "Case Count" = `Case Count` |> stringr::str_extract("[:digit:]*[:punct:]?[:digit:]*"),
+                 "Unit Price" = `Unit Price` |> stringr::str_extract("[:digit:]*[:punct:]?[:digit:]*"),
+                 "Royalty" = `Royalty` |> stringr::str_extract("[:digit:]*[:punct:]?[:digit:]*"),
+                 "Tags" = `Tags` |> stringr::str_extract("[:digit:]*[:punct:]?[:digit:]*"),
+                 "Freight" = `Freight` |> stringr::str_extract("[:digit:]*[:punct:]?[:digit:]*"),
+                 "Total Unit Rate" = `Total Unit Rate` |> stringr::str_extract("[:digit:]*[:punct:]?[:digit:]*")) |> 
+    dplyr::select(!any_of(c("Not Used1","Not Used2"))) |>
+    janitor::remove_empty("rows") |>
     dplyr::distinct() |>
     dplyr::filter(!is.na(`Order Number`))
   } |> janitor::remove_empty() |>
   unite(col = "Description", any_of(c("Class","Variety")), sep = " ", remove = FALSE)
-# stopImplicitCluster()
 
-
-# todo fix order function
-mtag_files <- tags_dir |> fs::path("MasterTag") |> fs::dir_ls() |> fs::path_filter(regex = "GREENSTREET_GROWERS_INC_Order Export_.*\\.xlsx")
+mtag_baseName <- "GREENSTREET_GROWERS_INC_Order Export_"
+mtag_files <- tags_dir |> fs::path("MasterTag") |> fs::dir_ls() |> fs::path_filter(regex = paste0(mtag_baseName,".*\\.xlsx"))
 # registerDoParallel(cores=n_cores-1)
-mtag_orders <- foreach::foreach(i=order_files(mtag_files, baseName = "GREENSTREET_GROWERS_INC_Order Export_", parseFun = mdy), .combine = \(x,y) dplyr::rows_upsert(x,y,by = c("MT Sales Order #", "MT ID")), .packages = c("foreach")) %dopar% { 
+mtag_orders <- foreach::foreach(i=order_files(mtag_files, baseName = mtag_baseName, parseFun = mdy), .combine = \(x,y) dplyr::rows_upsert(x,y,by = c("MT Sales Order #", "MT ID")), .packages = c("foreach")) %dopar% { 
   foreach(j=c(2,1), .combine = dplyr::left_join) %dopar% {
     read_xlsx_flex(path = mtag_files[i], sheet = j, guess_max = as.integer(.Machine$integer.max/100))
   } |> janitor::remove_empty("rows") |>
