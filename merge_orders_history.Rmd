@@ -2,7 +2,7 @@
 title: Combining orders from Ball and Express for Spring 2024
 author: Daniel R. Williams ^[Director of Quality Control, Greenstreet Growers, Lothian,
   MD] ^[PhD Candidate, Dept. of Ag. & Crop Science, Ohio State University, Columbus,  Ohio]
-date: 22 January 2023
+date: 3 April 2023
 output:
   pdf_document: default
   html_notebook: default
@@ -14,76 +14,87 @@ output:
 ```{r setup, echo=FALSE, error=TRUE, message=TRUE, warning=TRUE, include=FALSE}
 # this block loads required packages and some custom functions. 
 
-req_pkgs <- c("rlang", "magrittr", "tidyselect", "tidyverse", "lubridate", "stats", "readr", "measurements", "knitr", "plyr", "tidyr","bibtex","ggpubr","ggplot2", "firatheme", "gt", "ggpmisc", "foreach", "forcats", "doParallel", "parallel", "fs", "purrr", "janitor", "stringdist", "readxl", "writexl", "fuzzyjoin", "pwr", "effectsize", "Biostrings")
-#
-# install & load  # this is pretty fast compared to alternatives.
-find_package_quiet <- function(pkgs) unlist(find.package(pkgs, quiet = TRUE))
-require_package <- function(pkgs) {
-  # install.packages(setdiff(pkgs,names(unlist(sapply(pkgs,find_package_quiet)))))
-  if(!length(find_package_quiet("pak"))) {
-    install.packages("pak")
-  }
-  install_these <- setdiff(pkgs,pak::pkg_status(pkgs)$package)
-  if(length(install_these)) {
-    pak::pak_update(stream = "rc")
-    pak::pak(install_these, upgrade = TRUE, dependencies = TRUE)
-  }
+cran_pacs <- c("rlang", "pkgbuild","librarian", "pak", "rmarkdown", "tidyselect", "tidyverse", "magrittr", "stats", "measurements", "knitr", "foreach", "doParallel", "parallel", "fs", "janitor", "stringr", "readxl", "writexl","fuzzyjoin", "chromote", "pdftools", "lubridate", "readr", "tidyr", "forcats", "purrr", "stringdist", "multidplyr") |> unique() # "rvest", "polite", "XML", "tabulizer", "gt", "bigmemory"
+dev_pacs <- c() ## "aperium/rutil")
+bioc_pacs <- c("Biostrings") #,"msa")
+py_pacs <- c("camelot-py")
+
+## function to quietly find list of packages
+find_package_quiet <- function(pkgs, ...) unlist(find.package(pkgs, quiet = TRUE, ...))
+install_as_needed <- function(pacs, inst_fun = install.packages, check_fun = find_package_quiet, ...) {
+  inst_fun(setdiff(pacs,names(unlist(sapply(pacs,\(x) check_fun(x))))),...)
 }
-# require_package(c("pak", "librarian"))
-require_package(req_pkgs)
-installed_req_pkgs <- pak::pkg_status(req_pkgs)$package
-#
-librarian::shelf(req_pkgs, quiet = TRUE)
-if((("readxl" %in% req_pkgs)&is_empty(find_package_quiet("readxl")))|(("writexl" %in% req_pkgs)&is_empty(find_package_quiet("writexl")))) librarian::shelf("ycphs/openxlsx") #load openxlsx if read-/write-xl not avail
-if(((("readxl" %in% req_pkgs)&is_empty(find_package_quiet("readxl")))|(("writexl" %in% req_pkgs)&is_empty(find_package_quiet("writexl"))))&(is_empty(find_package_quiet("openxlsx")))) librarian::shelf("colearendt/xlsx") # load xlsx if openxlsx not avail
+
+# install cran packs
+if (length(cran_pacs) > 0) install_as_needed(cran_pacs,install.packages, quiet = TRUE)
+
+# install github dev packs
+if (length(dev_pacs)>0) {
+  if (!requireNamespace("pak", quietly = TRUE)[]) install.packages("pak", quiet = TRUE)
+  install_as_needed(dev_pacs,pak::pak, ask = FALSE, upgrade = TRUE)
+}
+
+# install bioc packs
+if (length(bioc_pacs)>0) {
+  if (!requireNamespace("BiocManager", quietly = TRUE)[]) install.packages("BiocManager", quiet = TRUE)
+  # install_as_needed(c("DBI","xfun"))
+  BiocManager::install(version = "3.18", update = FALSE, ask=FALSE)
+  install_as_needed(bioc_pacs,BiocManager::install, update = FALSE, ask=FALSE)
+}
+
+if (!requireNamespace("librarian", quietly = TRUE)[]) install.packages("librarian", quiet = TRUE)
+if (!requireNamespace("pak", quietly = TRUE)[]) install.packages("pak", quiet = TRUE)
+librarian::shelf(cran_pacs, bioc_pacs, dev_pacs, quiet = TRUE)
+installed_req_pkgs <- pak::pkg_status(c(cran_pacs, bioc_pacs, dev_pacs))$package
+loaded_pacs <- search() |> stringr::str_extract("(?<=:).*$") |> na.omit()
+
+
+# install python packs
+if (length(py_pacs)>0) {
+  if (!requireNamespace("reticulate", quietly = TRUE)[]) install.packages("reticulate", quiet = TRUE)
+  if (!reticulate::py_available(initialize = TRUE)) reticulate::install_python()
+  if (reticulate::py_available(initialize = TRUE)) reticulate::py_install(py_pacs)
+}
+
+# 
+# req_pkgs <- c("rlang", "magrittr", "tidyselect", "tidyverse", "lubridate", "stats", "readr", "measurements", "knitr", "plyr", "tidyr","bibtex","ggpubr","ggplot2", "firatheme", "gt", "ggpmisc", "foreach", "forcats", "doParallel", "parallel", "fs", "purrr", "janitor", "stringdist", "readxl", "writexl", "fuzzyjoin", "pwr", "effectsize", "Biostrings")
+# #
+# # install & load  # this is pretty fast compared to alternatives.
+# find_package_quiet <- function(pkgs) unlist(find.package(pkgs, quiet = TRUE))
+# require_package <- function(pkgs) {
+#   # install.packages(setdiff(pkgs,names(unlist(sapply(pkgs,find_package_quiet)))))
+#   if(!length(find_package_quiet("pak"))) {
+#     install.packages("pak")
+#   }
+#   install_these <- setdiff(pkgs,pak::pkg_status(pkgs)$package)
+#   if(length(install_these)) {
+#     pak::pak_update(stream = "rc")
+#     pak::pak(install_these, upgrade = TRUE, dependencies = TRUE)
+#   }
+# }
+# # require_package(c("pak", "librarian"))
+# require_package(req_pkgs)
+# installed_req_pkgs <- pak::pkg_status(req_pkgs)$package
+# #
+# librarian::shelf(req_pkgs, quiet = TRUE)
+# if((("readxl" %in% req_pkgs)&is_empty(find_package_quiet("readxl")))|(("writexl" %in% req_pkgs)&is_empty(find_package_quiet("writexl")))) librarian::shelf("ycphs/openxlsx") #load openxlsx if read-/write-xl not avail
+# if(((("readxl" %in% req_pkgs)&is_empty(find_package_quiet("readxl")))|(("writexl" %in% req_pkgs)&is_empty(find_package_quiet("writexl"))))&(is_empty(find_package_quiet("openxlsx")))) librarian::shelf("colearendt/xlsx") # load xlsx if openxlsx not avail
 #
 ## register cores for foreach
 n_cores <- parallel::detectCores()
 # registerDoParallel(cores=n_cores)
 # stopImplicitCluster()
 
-# check_na = function(x) (is.na(x)|str_equal(x,"")|str_equal(x,"N/A", ignore_case = TRUE)|str_equal(x,"NA", ignore_case = TRUE)|(x==0)|is_na(x)|is_chr_na(x)|is_null(x))
-# 
-# column_not_na = function(x) not(all(check_na(x)))
-# 
-# remove_empties = function(x) x %>% dplyr::select(where(column_not_na)) %>% janitor::remove_empty()
-# 
-# na_zero <- function(x) {if_else(is.na(x),0,x)}
-# 
-# round_1 <- function(x) {
-#   round_any(x,1) %>% as.integer()
-# }
-# 
-# round_any_int <- function(x,accuracy = 1,f = round) {
-#   round_any(x,accuracy,f) %>% as.integer()
-# }
-# 
-# # function for summarizing names by finding the one the best fits a match in another list
-# bestmatch <- function(old_values, new_values) {
-#   ovs <- old_values %>% as.character() %>% str_to_lower()
-#   nvs <- new_values %>% as.character() %>% str_to_lower()
-#   # tibble(var = select, 
-#   #        mindist= foreach::foreach(i=1:length(var)) %dopar% min(stringdist::afind(against, var)$distance[,i]) %>% unlist()) %>% dplyr::filter(mindist == min(.$mindist)) %>% .$var %>% unlist() %>% .[1]
-#   distmat <- stringdist::afind(nvs, ovs, method='lcs') %>% .$distance
-#   registerDoParallel(parallel::detectCores()-1)
-#   out <- foreach::foreach(i=1:length(ovs), .combine = c, .packages = installed_req_pkgs, .export = c("distmat","new_values")) %dopar% new_values[distmat[,i] == min(distmat[,i])][1]
-#   stopImplicitCluster()
-#   return(out)
-# }
-# bestmatch(c("alpaca","butter", "zebra", "quality", "zygo"), c("epsilon", "alpha", "beta", "gamma", "delta", "zeta"))
+if(is_null(getDefaultCluster())) {
+  makeCluster(n_cores-1) |> setDefaultCluster()
+  registerDoParallel(getDefaultCluster())
+}
 
-## searches all common columns between data.frames x & y for matching values of x in y. Returns a logical vector of length nrow(x).
-## In tidyverse functions use `.` to explicitly place the scoped frame as x: (eg. `dplyr::filter(<df1>, match_in(.,<df2>))`).
-## Note: `dplyr::anti_join` and `dplyr::semi_join` are likely faster and more robust for the filtering use case.
-# match_in <- function(x,y) {foreach(i=1:nrow(x), .combine = c, .packages = installed_req_pkgs, .export= c("x", "y")) %dopar% (slice(x,i) %>% remove_empties() %>% match_df(y) %>% empty() %>% not())}
-
-## paste rowwise
-# vector_paste <- function(x,y, sep=" ") {
-#   registerDoParallel(parallel::detectCores()-1)
-#   out <- foreach::foreach(i=1:length(x), .packages = installed_req_pkgs, .export = c("x","y","sep")) %dopar% janitor::paste_skip_na(x[i],y[i],sep = sep) %>% unlist()
-#   stopImplicitCluster()
-#   return(out)
-#   }
+if(!exists("dCluster")) {
+  dCluster <- new_cluster(n_cores-1)
+  cluster_library_quiety <- purrr::quietly(cluster_library)
+  cluster_library_quiety(dCluster, installed_req_pkgs)
+}
 
 ```
 
@@ -134,29 +145,169 @@ write_xlsx_flex <- function(x, path = tempfile(fileext = ".xlsx")) {
 
 ```
 
+```{r utilityfuns}
+
+## an alignment function for similar names
+pairwiseAlightmentMatch = function(x,y) {Biostrings::pairwiseAlignment(x,y,scoreOnly = TRUE) > 0}
+
+# name order function. Pulls out words and sorts them. Vectorized.
+string_alignment_prep <- function(x) {
+  prep_one <- function(y) {
+    y |> 
+      stringr::str_to_lower() |>
+      stringr::str_replace_all("(?<=[:alnum:])[:punct:](?=[:alnum:])"," ") |>
+      stringr::str_remove_all("[:punct:]|®|™") |>
+      stringr::str_remove_all("(?<=([:space:]|^))(herb)|(he)|(vf)(?=([:space:]|$))") |>
+      stringr::str_extract_all("([:alpha:]{2,})|(([:digit:]*(\\.[:digit:]+)?)(?!c$))", simplify = TRUE) |> 
+      stringr::str_squish() |> 
+      stringr::str_unique() |> 
+      as.character() |> 
+      stringr::str_sort() |> 
+      stringr::str_flatten(collapse = " ")
+  }
+  sapply(x, prep_one)
+}
+
+# this is a two-way name match. Matches are true if the best match x -> y is also the best match y -> x. Vectorized. 
+name_match <- function(x,y) {
+
+  x_u <- x |> stringr::str_unique()
+  y_u <- y |> stringr::str_unique()
+  
+  xy_intersect <- generics::intersect(x_u, y_u)
+  x_u <- generics::setdiff(x_u,xy_intersect)
+  y_u <- generics::setdiff(y_u,xy_intersect)
+  
+  if((length(x_u) == 0)&(length(y_u) == 0)) {
+    out1 <- mapply(\(m,n) {stringr::str_equal(m,n,ignore_case = TRUE)},x,y)
+    return(out1)
+  }
+  
+  # print(1)
+
+  doParallel::registerDoParallel(cores=n_cores-1)
+  scores <- foreach::foreach(i=1:length(y_u), .combine = rbind, .export = "string_alignment_prep") %dopar% {
+    # print("1a")
+    raw_score <- Biostrings::pairwiseAlignment(x_u |> string_alignment_prep(), y_u[i] |> string_alignment_prep(),scoreOnly = TRUE)
+    dplyr::if_else(raw_score>=0,raw_score,-stringr::str_length(paste0(x_u, y_u[i]))/raw_score)
+  } |> unlist()
+  # print("1b")
+  doParallel::stopImplicitCluster()
+
+  # print(2)
+  
+  y_loc <- apply(scores, 2, which.max) |> unname() |> as.integer()
+  x_loc <- apply(scores, 1, which.max) |> unname() |> as.integer()
+
+  x_y_index <- foreach(j=1:length(x_loc), .combine = rbind) %do% c(xname = x_u[x_loc[j]], yname = y_u[j], xi = x_loc[j] |> as.integer(), yi = j |> as.integer())
+  y_x_index <- foreach(i=1:length(y_loc), .combine = rbind) %do% c(yname = y_u[y_loc[i]], xname = x_u[i], yi = y_loc[i] |> as.integer(), xi = i |> as.integer())
+
+  # print(3)
+  
+  joined_index = inner_join(x_y_index |> as_tibble(),y_x_index |> as_tibble()) |>
+    mutate(yi = yi |> as.integer(),
+           xi = xi |> as.integer(),
+           score = scores[yi*xi],
+           lmax = pmax(str_length(yname),str_length(xname)),
+           lmin = pmin(str_length(yname),str_length(xname)),
+           # score_adj = -(lmax)/score,
+           score_adj = if_else(score>=0,score,score/(lmax*lmin)))
+  
+  # TODO ? re-match using the unmatched items from each list. Could also reject matches below a cutoff score.
+  
+  # print(4)
+
+  out2 <- mapply(\(m,n) {str_equal(m,n,ignore_case = TRUE)|str_equal(joined_index$yname[match(m,joined_index$xname)],n,ignore_case = TRUE)},x,y) |>
+    sapply(\(x) {
+      if(is.na(x)) FALSE
+      else x
+      })
+  return(out2)
+}
+
+
+```
 
 
 ```{r datasetup, echo=TRUE, error=TRUE, message=FALSE, warning=TRUE}
 
-dir_path <- "Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstreet/Production Planning QC/Plant Sales and Orders" |> fs::path_home()
+if(is_null(getDefaultCluster())) {
+  makeCluster(n_cores-1) |> setDefaultCluster()
+  registerDoParallel(getDefaultCluster())
+}
 
-e_orders <- dir_path |> fs::path("Express Seed export","express_open_orders_20240228.xlsx") |>
-  read_xlsx_flex(guess_max = Inf)
+plants_dir <- "Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstreet/Production Planning QC/Plant Sales and Orders" |> fs::path_home()
+tags_dir <- "Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstreet/Production Planning QC/Tags/" |> fs::path_home()
 
-e_delivered <- dir_path |> fs::path("Express Seed export","express_shipped_orders_20240228.xlsx") |>
-  read_xlsx_flex(guess_max = Inf)
+e_orders <- plants_dir |> fs::path("Express Seed export","express_open_orders_20240228.xlsx") |>
+  read_xlsx_flex(guess_max = as.integer(.Machine$integer.max/100)) |> 
+  janitor::remove_empty()
 
-b_orders <- dir_path |> fs::path("Ball export","order_download_20240228110813.xlsx") |>
-  read_xlsx_flex(guess_max = Inf) |>
-  mutate(vendor = "Ball",
-         "Order Number" = `Order Number` %>% as.character(),
-         "Sales Order Date" = `Sales Order Date` %>% ymd(),
-         "Ship Date" = `Ship Date` %>% ymd(),
-         "Total Extended Value" = `Total Extended Value` |> as.numeric())
+e_delivered <- plants_dir |> fs::path("Express Seed export","express_shipped_orders_20240228.xlsx") |>
+  read_xlsx_flex(guess_max = as.integer(.Machine$integer.max/100)) |> 
+  janitor::remove_empty()
+
+b_files <- plants_dir |> fs::path("Ball export") |> fs::dir_ls() |> fs::path_filter(regex = "order_download_.*\\.xlsx")
+b_orders <- foreach::foreach(i=order(b_files), .combine = \(x,y) dplyr::rows_upsert(x,y,by = c("Order Number", "Order Line"))) %dopar% { read_xlsx_flex(b_files[i], guess_max = as.integer(.Machine$integer.max/100)) |>
+  dplyr::mutate(vendor = "Ball",
+         "Order Number" = `Order Number` |> as.character(),
+         "Sales Order Date" = `Sales Order Date` |> lubridate::ymd(),
+         "Ship Date" = `Ship Date` |> lubridate::ymd(),
+         "Total Extended Value" = `Total Extended Value` |> as.numeric(),
+         "Order Line" = `Order Line` |> stringr::str_extract("[:digit:]*"),
+         "Ship Week" = `Ship Week` |> stringr::str_extract("[:digit:]*[:graph:]?[:digit:]*"),
+         "Case Count" = `Case Count` |> stringr::str_extract("[:digit:]*[:punct:]?[:digit:]*"),
+         "Unit Price" = `Unit Price` |> stringr::str_extract("[:digit:]*[:punct:]?[:digit:]*"),
+         "Royalty" = `Royalty` |> stringr::str_extract("[:digit:]*[:punct:]?[:digit:]*"),
+         "Tags" = `Tags` |> stringr::str_extract("[:digit:]*[:punct:]?[:digit:]*"),
+         "Freight" = `Freight` |> stringr::str_extract("[:digit:]*[:punct:]?[:digit:]*"),
+         "Total Unit Rate" = `Total Unit Rate` |> stringr::str_extract("[:digit:]*[:punct:]?[:digit:]*")) |> 
+  dplyr::select(!any_of(c("Not Used1","Not Used2"))) |>
+  janitor::remove_empty("rows") |>
+    dplyr::distinct() |>
+    dplyr::filter(!is.na(`Order Number`))
+  } |> janitor::remove_empty() |>
+  unite(col = "Description", any_of(c("Class","Variety")), sep = " ", remove = FALSE)
+# stopImplicitCluster()
+
+# old ball import method
+# b_orders <- dir_path |> fs::path("Ball export","order_download_20240228110813.xlsx") |>
+#   read_xlsx_flex(guess_max = as.integer(.Machine$integer.max/100)) |>
+#   mutate(vendor = "Ball",
+#          "Order Number" = `Order Number` %>% as.character(),
+#          "Sales Order Date" = `Sales Order Date` %>% ymd(),
+#          "Ship Date" = `Ship Date` %>% ymd(),
+#          "Total Extended Value" = `Total Extended Value` |> as.numeric()) |> 
+#   janitor::remove_empty()
+
+# todo fix order function
+mtag_files <- tags_dir |> fs::path("MasterTag") |> fs::dir_ls() |> fs::path_filter(regex = "GREENSTREET_GROWERS_INC_Order Export_.*\\.xlsx")
+# registerDoParallel(cores=n_cores-1)
+mtag_orders <- foreach::foreach(i=order(mtag_files), .combine = \(x,y) dplyr::rows_upsert(x,y,by = c("MT Sales Order #", "MT ID")), .packages = c("foreach")) %dopar% { 
+  foreach(j=c(2,1), .combine = dplyr::left_join) %dopar% {
+    read_xlsx_flex(path = mtag_files[i], sheet = j, guess_max = as.integer(.Machine$integer.max/100))
+  } |> janitor::remove_empty("rows") |>
+    dplyr::distinct()
+  } |> janitor::remove_empty() |>
+    dplyr::mutate(vendor = "MasterTag",
+                  "Estimated Ship Date" = `Estimated Ship Date` |> mdy() ) #,
+                  # "MT Item Description" = `MT Item Description` |> str_remove_all("[:punct:]|®|™") |> str_squish() |> str_to_lower())
+
+
+# old mtag import method
+# mtag_path <- tags_dir |> fs::path("MasterTag") |> fs::path("GREENSTREET_GROWERS_INC_Order Export_03_06_2024.xlsx")
+# registerDoParallel(cores=n_cores-1)
+# mtag_orders <- foreach(i=c(2,1), .combine = left_join) %dopar% {
+#   read_xlsx_flex(path = mtag_path, sheet = i, guess_max = as.integer(.Machine$integer.max/100))
+# } |> janitor::remove_empty()
+# stopImplicitCluster()
+
+
+
 ```
 
 
-```{r join}
+```{r e_b_join}
 
 e_combined <- dplyr::full_join(e_orders, e_delivered) |>
   select("Order #", "Customer PO #", "Order Date", "Ship Date", "Week", "Product #", "Description", "Supplier", "QTY Ordered", "Total") |>
@@ -178,12 +329,172 @@ e_combined <- dplyr::full_join(e_orders, e_delivered) |>
 #     b_names[match(max(scores),scores)]
 #   }, simplify = "tibble")
 
-alignment <- c("vendor" = "vendor", "Order #" = "Order Number","Customer PO #" = "PO Number", "Order Date" = "Sales Order Date", "Ship Date" = "Ship Date", "Week" = "Ship Week", "Product #" = "Ball Material Number", "Description" = "Variety", "Supplier" = "Supplier", "QTY Ordered" = "Quantity", "Total" = "Total Extended Value")
+alignment <- c("vendor" = "vendor", "Order #" = "Order Number","Customer PO #" = "PO Number", "Order Date" = "Sales Order Date", "Ship Date" = "Ship Date", "Week" = "Ship Week", "Product #" = "Ball Material Number", "Description" = "Description", "Supplier" = "Supplier", "QTY Ordered" = "Quantity", "Total" = "Total Extended Value")
 
-joined <- full_join(e_combined, b_orders, by=alignment) %>%
-  select(names(alignment))
+plants_joined <- full_join(e_combined, b_orders, by=alignment) %>%
+  select(names(alignment)) ## |>
+  # rowwise() |>
+  # mutate(Description = Description |> str_to_lower() |> str_extract_all("([:alpha:]{2,})|([:digit:]*(\\.[:digit:]+)(?!C$))", simplify = TRUE) |> str_squish() |> unique() |> as.character() |> str_flatten(collapse = " "))
 
 ```
+
+```{r filter}
+
+if(!exists("dCluster")) {
+  dCluster <- new_cluster(n_cores-1)
+  cluster_library_quiety <- purrr::quietly(cluster_library)
+  cluster_library_quiety(dCluster, installed_req_pkgs)
+}
+
+plants_filtered <- plants_joined |>
+  partition(dCluster) |>
+  dplyr::filter((`Ship Date` >= "20240101" |> ymd())&(`Ship Date` < "20240701" |> ymd()),
+                Supplier |> str_equal("Kube Pak"),
+                (Description |> str_detect("(^|[:space:])(HE)|(VF)[:space:]"))|(`Customer PO #` |> str_to_lower() |> str_detect("(herb)|(veg)"))) |>
+  # dplyr::mutate(Description = Description |> str_remove_all("(?<=([:space:]|^))((herb)|(he)|(vf))(?=([:space:]|$))") |> str_squish()) |>
+  collect()
+
+
+
+tags_filtered <- mtag_orders |>
+  dplyr::filter((`Estimated Ship Date` >= "20240101" |> ymd())&(`Estimated Ship Date` < "20240701" |> ymd()),
+                str_detect(`PO #` |> str_to_lower(),"(herb)|(veg)|(daniel)"))
+
+```
+
+```{r mtag_join}
+
+# Biostrings::pairwiseAlignment()
+# 
+
+# aligned <- fuzzyjoin::fuzzy_full_join(filtered, mtag_orders, by=c("Description"="MT Item Description"), match_fun = pairwiseAlightmentMatch)
+# 
+# tag_names <- mtag_orders$`MT Item Description` |> unique()
+# plant_names <- filtered$Description |> unique()
+# 
+# intersect_names <- intersect(tag_names, plant_names)
+# tag_names <- setdiff(tag_names,intersect_names)
+# plant_names <- setdiff(plant_names,intersect_names)
+# 
+# # pairwiseAlightmentMatch(tag_names, plant_names[1])
+# 
+# registerDoParallel(cores=n_cores*3/4)
+# scores <- foreach(i=1:length(plant_names), .combine = rbind, .export = c("plant_names","tag_names")) %dopar% {
+#   Biostrings::pairwiseAlignment(tag_names, plant_names[i],scoreOnly = TRUE)
+#   } |> unlist()
+# stopImplicitCluster()
+# 
+# # mean(scores)
+# # median(scores)
+# # apply(scores, 2, max) |> mean()
+# # apply(scores, 1, max) |> mean()
+# # apply(scores, 2, max) |> quantile(.1)
+# # apply(scores, 1, max) |> quantile(.1)
+# 
+# p_loc <- apply(scores, 2, which.max) |> unname() |> as.integer()
+# # plant_names[p_loc]
+# 
+# t_loc <- apply(scores, 1, which.max) |> unname() |> as.integer()
+# # tag_names[t_loc]
+# 
+# #considder big.matrix
+# ## TODO index logic needs checked
+# 
+# # plant_boolmat <- matrix("", nrow = length(p_loc), ncol = length(t_loc))
+# # foreach(j=1:length(t_loc), .combine = \(...){NULL}) %do% {
+# #   plant_boolmat[p_loc[j],j] <- paste(sep = " - ", tag_names[t_loc[j]], plant_names[j])
+# # }
+# tag_plant_index <- foreach(j=1:length(t_loc), .combine = rbind) %do% {
+#   c(tagname = tag_names[t_loc[j]], plantname = plant_names[j], tagi = t_loc[j] |> as.integer(), planti = j |> as.integer()) #, tpi = TRUE)
+# }
+# 
+# # tag_boolmat <- matrix("", nrow = length(p_loc), ncol = length(t_loc))
+# # foreach(i=1:length(p_loc), .combine = \(...){NULL}) %do% {
+# #   tag_boolmat[i,p_loc[i]] <- paste(sep = " - ", plant_names[p_loc[i]], tag_names[i])
+# # }
+# plant_tag_index <- foreach(i=1:length(p_loc), .combine = rbind) %do% {
+#   c(plantname = plant_names[p_loc[i]], tagname = tag_names[i], planti = p_loc[i] |> as.integer(), tagi = i |> as.integer()) #, pti = TRUE)
+# }
+# 
+# joined_index = inner_join(tag_plant_index |> as_tibble(),plant_tag_index |> as_tibble()) |>
+#   mutate(planti = planti |> as.integer(),
+#          tagi = tagi |> as.integer(),
+#          score = scores[planti*tagi],
+#          # pnamel = str_length(plantname),
+#          # tnamel = str_length(tagname),
+#          lmax = pmax(str_length(plantname),str_length(tagname)),
+#          lmin = pmin(str_length(plantname),str_length(tagname)),
+#          # score_adj1 = score/lmin,
+#          # score_adj2 = score/(pmin(str_length(plantname),str_length(tagname))/pmax(str_length(plantname),str_length(tagname))),
+#          # score_adj3 = score/(lmax/lmin),
+#          # score_adj4 = -(lmax*lmin)/score,
+#          # score_adj5 = -(lmax+lmin)/score,
+#          score_adj0 = -(lmax)/score,
+#          score_adj = if_else(score>=0,score,-(lmax+lmin)/score))
+# 
+# 
+# mapply(\(x,y) {str_equal(x,y, ignore_case = TRUE)|str_equal(joined_index$plantname[match(x, joined_index$tagname)] ,y, ignore_case = TRUE)},mtag_orders$`MT Item Description`, mtag_orders$`MT Item Description`)
+
+
+# # testing out a correction factor for alignment scoring
+# tag_names <- mtag_orders$`MT Item Description` |> unique()
+# plant_names <- filtered$Description |> unique() |> extract2(6)
+# # get(plant_names[1])
+# dummy_align <- tag_names |> as_tibble_col("tagname") |>
+#   add_column("score" = Biostrings::pairwiseAlignment(tag_names |> string_alignment_prep(), plant_names |> string_alignment_prep(),scoreOnly = TRUE) |> as.vector()) |>
+#   mutate(lmax = pmax(str_length(plant_names),str_length(tagname)),
+#          lmin = pmin(str_length(plant_names),str_length(tagname)),
+#          # score_adj9 = score/length(tagname),
+#          # score_adj8 = score/length(plant_names),
+#          # score_adj4 = -(lmax+lmin)/score,
+#          # score_adj5 = score,
+#          # score_adj2 = if_else(score>=0,score_adj5,score_adj4),
+#          # score_adj1 = score/lmax,
+#          # score_adj6 = -(lmax)/score,
+#          score_adj = if_else(score>=0,score,-(lmax+lmin)/score),
+#          # score_adj_a = if_else(score>=0,score,score*lmax/lmin),
+#          score_adj_b = if_else(score>=0,score,score/(lmax*lmin))) |>
+#   arrange(desc(score_adj_b))
+
+
+
+# testout <- name_match(mtag_orders$`MT Item Description` |> unique(), filtered$Description |> unique())
+
+plants_prep <- plants_filtered |>
+  summarise(`QTY Ordered` = sum(`QTY Ordered`), .by = any_of(c("Description"))) |>
+  rename_with(\(x) paste0("plants_",x))
+
+tags_prep <- tags_filtered |>
+  summarise(`Ordered Quantity` = sum(`Ordered Quantity`), .by = any_of(c("MT Item Description"))) |>
+  rename_with(\(x) paste0("tags_",x))
+
+aligned <- fuzzyjoin::fuzzy_full_join(plants_prep, tags_prep, by=c("plants_Description"="tags_MT Item Description"), match_fun = name_match)
+
+
+# can i use dplyr::join with dplyr::closest() with pairwiseAligment scores? or maybe need to use fuzzyjoin
+
+
+```
+
+```{r tags_per_plug}
+
+aligned %<>%
+  mutate(subdept = case_when(plants_Description |> str_to_lower() |> str_detect("(?<=(^|[:space:]))(he(rb)?)(?=($|[:space:]))") ~ "herb",
+                             plants_Description |> str_to_lower() |> str_detect("(?<=(^|[:space:]))(vf)(?=($|[:space:]))") ~ "veg",
+                             plants_Description |> str_to_lower() |> str_detect("(?<=(^|[:space:]))(lavandula)|(lavender)(?=($|[:space:]))") ~ "herb",
+                             plants_Description |> str_to_lower() |> str_detect("(?<=(^|[:space:]))(eucalyptus)|(lemon[:space:]?bush)(?=($|[:space:]))") ~ "herb",
+                             plants_Description |> str_to_lower() |> str_detect("(?<=(^|[:space:]))(marigold)(?=($|[:space:]))") ~ "veg",
+                             plants_Description |> str_to_lower() |> str_detect("(?<=(^|[:space:]))(melampodium)(?=($|[:space:]))") ~ "veg",
+                             .default = NA),
+         tags_per_plug = case_match(subdept,
+                                    c("herb") ~ 1,
+                                    c("veg") ~ 4,
+                                    .default = 1),
+         tags_need = `plants_QTY Ordered` / tags_per_plug,
+         tags_deficit = (tags_need - datawizard::convert_na_to(`tags_Ordered Quantity`,replacement = 0)) |> pmax(0))
+
+```
+
 
 
 ```{r export}
