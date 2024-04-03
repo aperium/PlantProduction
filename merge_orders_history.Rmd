@@ -234,13 +234,23 @@ if(is_null(getDefaultCluster())) {
 plants_dir <- "Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstreet/Production Planning QC/Plant Sales and Orders" |> fs::path_home()
 tags_dir <- "Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstreet/Production Planning QC/Tags/" |> fs::path_home()
 
-e_orders <- plants_dir |> fs::path("Express Seed export","express_open_orders_20240228.xlsx") |>
-  read_xlsx_flex(guess_max = as.integer(.Machine$integer.max/100)) |> 
-  janitor::remove_empty()
+# e_orders <- plants_dir |> fs::path("Express Seed export","express_open_orders_20240228.xlsx") |>
+#   read_xlsx_flex(guess_max = as.integer(.Machine$integer.max/100)) |> 
+#   janitor::remove_empty()
 
-e_delivered <- plants_dir |> fs::path("Express Seed export","express_shipped_orders_20240228.xlsx") |>
-  read_xlsx_flex(guess_max = as.integer(.Machine$integer.max/100)) |> 
-  janitor::remove_empty()
+# this is a bit excessive, becaues it really only makes sense to read in the latest open orders file. I've updated to only read the latestest open orders file.
+e_orders_baseName <- "express_open_orders_"
+e_orders_files <- plants_dir |> fs::path("Express Seed export") |> fs::dir_ls() |> fs::path_filter(regex = paste0(e_orders_baseName,".*\\.xlsx"))
+e_orders <- foreach::foreach(i=order_files(e_orders_files, baseName = e_orders_baseName, parseFun = ymd) |> max(), .combine = \(x,y) dplyr::rows_upsert(x,y,by = c("Order #", "Purchase Order #", "Customer PO #", "Order Date", "Product #", "Supplier", "QTY Ordered"))) %dopar% { 
+  read_xlsx_flex(e_orders_files[i], guess_max = as.integer(.Machine$integer.max/100)) |>
+    janitor::remove_empty("rows") |>
+    dplyr::distinct() |>
+   dplyr::filter(!is.na(`Order #`))
+  } |> janitor::remove_empty()
+
+# e_delivered <- plants_dir |> fs::path("Express Seed export","express_shipped_orders_20240228.xlsx") |>
+#   read_xlsx_flex(guess_max = as.integer(.Machine$integer.max/100)) |> 
+#   janitor::remove_empty()
 
 e_delivered_baseName <- "express_shipped_orders_"
 e_delivered_files <- plants_dir |> fs::path("Express Seed export") |> fs::dir_ls() |> fs::path_filter(regex = paste0(e_delivered_baseName,".*\\.xlsx"))
