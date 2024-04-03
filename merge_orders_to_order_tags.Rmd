@@ -94,7 +94,16 @@ n_cores <- parallel::detectCores()
 # registerDoParallel(cores=n_cores)
 # stopImplicitCluster()
 
+if(is_null(getDefaultCluster())) {
+  makeCluster(n_cores-1) |> setDefaultCluster()
+  registerDoParallel(getDefaultCluster())
+}
 
+if(!exists("dCluster")) {
+  dCluster <- new_cluster(n_cores-1)
+  cluster_library_quiety <- purrr::quietly(cluster_library)
+  cluster_library_quiety(dCluster, installed_req_pkgs)
+}
 
 ```
 
@@ -337,18 +346,21 @@ plants_joined <- full_join(e_combined, b_orders, by=alignment) %>%
 
 ```{r filter}
 
-cluster <- new_cluster(n_cores-1)
-cluster_library(cluster, installed_req_pkgs)
+if(!exists("dCluster")) {
+  dCluster <- new_cluster(n_cores-1)
+  cluster_library_quiety <- purrr::quietly(cluster_library)
+  cluster_library_quiety(dCluster, installed_req_pkgs)
+}
 
 plants_filtered <- plants_joined |>
-  partition(cluster) |>
+  partition(dCluster) |>
   dplyr::filter((`Ship Date` >= "20240101" |> ymd())&(`Ship Date` < "20240701" |> ymd()),
                 Supplier |> str_equal("Kube Pak"),
                 (Description |> str_detect("(^|[:space:])(HE)|(VF)[:space:]"))|(`Customer PO #` |> str_to_lower() |> str_detect("(herb)|(veg)"))) |>
   # dplyr::mutate(Description = Description |> str_remove_all("(?<=([:space:]|^))((herb)|(he)|(vf))(?=([:space:]|$))") |> str_squish()) |>
   collect()
 
-rm(cluster)
+
 
 tags_filtered <- mtag_orders |>
   dplyr::filter((`Estimated Ship Date` >= "20240101" |> ymd())&(`Estimated Ship Date` < "20240701" |> ymd()),
@@ -531,4 +543,10 @@ averages <- joined |>
 
 ```
 
+```{r terminateClusters, eval=FALSE}
+# dplyr cluster
+if(exists("dCluster")) rm(dCluster)
 
+# doParallel cluster
+if(!is_null(getDefaultCluster())) stopCluster(getDefaultCluster())
+```
