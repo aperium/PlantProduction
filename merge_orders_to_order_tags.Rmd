@@ -240,7 +240,10 @@ name_match <- function(x,y) {
 
 ```{r datasetup, echo=TRUE, error=TRUE, message=FALSE, warning=TRUE}
 
-registerDoParallel(cores=n_cores-1)
+if(is_null(getDefaultCluster())) {
+  makeCluster(n_cores-1) |> setDefaultCluster()
+  registerDoParallel(getDefaultCluster())
+}
 
 plants_dir <- "Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstreet/Production Planning QC/Plant Sales and Orders" |> fs::path_home()
 tags_dir <- "Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstreet/Production Planning QC/Tags/" |> fs::path_home()
@@ -308,7 +311,7 @@ mtag_orders <- foreach::foreach(i=order(mtag_files), .combine = \(x,y) dplyr::ro
 # } |> janitor::remove_empty()
 # stopImplicitCluster()
 
-stopImplicitCluster()
+
 
 ```
 
