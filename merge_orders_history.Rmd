@@ -271,21 +271,6 @@ e_combined <- dplyr::full_join(e_orders, e_delivered) |>
   select("Order #", "Customer PO #", "Order Date", "Ship Date", "Week", "Product #", "Description", "Supplier", "QTY Ordered", "Total") |>
   mutate(vendor = "Express")
 
-# e_names <- e_combined %>% names() 
-# 
-# b_names <- b_orders %>% names()
-# b_names_2 <- b_names %>% 
-#   str_replace_all("(N|n)umber","#") %>%
-#   str_replace_all("(Q|q)uantity","QTY") %>%
-#   str_replace_all("PO","Customer PO") %>%
-#   str_replace_all("Ball Material","Product") %>%
-#   str_replace_all("Variety","Description")
-#   
-# ## creates an alignment matrix of the column names and chooses best match
-# alignment <- sapply(e_names, function(x) {
-#     scores <- Biostrings::pairwiseAlignment(b_names_2,x, , gapOpening = 1, gapExtension = 1) %>% score()
-#     b_names[match(max(scores),scores)]
-#   }, simplify = "tibble")
 
 alignment <- c("vendor" = "vendor", "Order #" = "Order Number","Customer PO #" = "PO Number", "Order Date" = "Sales Order Date", "Ship Date" = "Ship Date", "Week" = "Ship Week", "Product #" = "Ball Material Number", "Description" = "Description", "Supplier" = "Supplier", "QTY Ordered" = "Quantity", "Total" = "Total Extended Value")
 
