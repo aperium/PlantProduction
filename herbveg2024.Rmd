@@ -122,43 +122,6 @@ write_xlsx_flex <- function(x, path = tempfile(fileext = ".xlsx"), ...) {
 
 ```
 
-```{r scraping, eval=FALSE}
-
-## quick using google to get the address from any text query. Works best if the query is a mostly complete address.
-## TODO let query be a list of strings. Internally reduce to unique queries and then re expand to same lenth as query for return.
-google_get_address <- function(query) {
-  query <- query |> str_replace_all("[:space:]","*")
-  b <- ChromoteSession$new()
-  b$Page$navigate(paste0("https://www.google.com/search?q=",query,"*va&sclient=gws-wiz-serp"))
-  b$Page$loadEventFired()
-  x <- b$DOM$getDocument() %>% { b$DOM$querySelector(.$root$nodeId, ".LrzXr") } %>% { b$DOM$getOuterHTML(.$nodeId) } |> unlist() |> str_trim() |> str_remove_all("(<.*>(?=[^$]))|((?<=[^^])<.*>)")
-  b$close()
-  return(x)
-}
-
-google_get_addresses <- function(query) {
-  query <- query |> str_replace_all("[:space:]","*")
-  uniquery <- query |> str_unique()
-  tmp_join <- function(...) full_join(..., by = join_by(query, result))
-  b <- ChromoteSession$new()
-  results <- foreach(i=1:length(uniquery), .combine = tmp_join, .multicombine = FALSE) %do% {
-    b$Page$navigate(paste0("https://www.google.com/search?q=",uniquery[i],"*va&sclient=gws-wiz-serp"))
-    b$Page$loadEventFired()
-    x<-NA
-    try(x <- b$DOM$getDocument() %>% { b$DOM$querySelector(.$root$nodeId, ".LrzXr") } %>% { b$DOM$getOuterHTML(.$nodeId) } |> unlist() |> str_trim() |> str_remove_all("(<.*>(?=[^$]))|((?<=[^^])<.*>)"), silent = TRUE)
-    tibble_row(query=uniquery[i],result=x)
-  } |>
-    right_join(query |> as_tibble_col(column_name = "query"), by = join_by(query)) |>
-    pull(result)
-  b$close()
-  return(results)
-}
-
-# c("greenstreet gardens braddock road alexandria VA","giant e glebe Alexandria VA","the white house washington DC", "gateway arch St louis MO") |>
-# google_get_addresses()
-
-```
-
 
 ```{r utilfuns}
 
