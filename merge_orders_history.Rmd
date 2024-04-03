@@ -317,15 +317,7 @@ tags_prep <- tags_filtered |>
   rename_with(\(x) paste0("tags_",x))
 
 aligned <- fuzzyjoin::fuzzy_full_join(plants_prep, tags_prep, by=c("plants_Description"="tags_MT Item Description"), match_fun = name_match)
-
-
-# can i use dplyr::join with dplyr::closest() with pairwiseAligment scores? or maybe need to use fuzzyjoin
-
-
-```
-
-```{r tags_per_plug}
-
+## adding tag counts
 aligned %<>%
   mutate(subdept = case_when(plants_Description |> str_to_lower() |> str_detect("(?<=(^|[:space:]))(he(rb)?)(?=($|[:space:]))") ~ "herb",
                              plants_Description |> str_to_lower() |> str_detect("(?<=(^|[:space:]))(vf)(?=($|[:space:]))") ~ "veg",
@@ -341,11 +333,14 @@ aligned %<>%
          tags_need = `plants_QTY Ordered` / tags_per_plug,
          tags_deficit = (tags_need - datawizard::convert_na_to(`tags_Ordered Quantity`,replacement = 0)) |> pmax(0))
 
+# can i use dplyr::join with dplyr::closest() with pairwiseAligment scores? or maybe need to use fuzzyjoin
+
+
 ```
 
 
 
-```{r export}
+```{r export, eval=FALSE}
 joined %<>%
   mutate(size = case_when(str_detect(`Customer PO #`,"(^4.5)|(4.5[:space:]?((IN)|(in)|(\")))") ~ "4.5 in",
                            str_detect(`Customer PO #`,"^804") ~ "804",
@@ -369,7 +364,7 @@ joined %<>%
 write_xlsx_flex(joined, path = dir_path |> fs::path("2024", "ball express spring 2024", "spring2024_ball&express_v5.xlsx"))
 ```
 
-```{r averages}
+```{r averages, eval=FALSE}
 
 plugs_tbl <- tibble_row(size = "4 in", plugs = 1) |> # .25
   tibble::add_case(size = "4.5 in", plugs = 1)|> # .07
