@@ -186,7 +186,8 @@ if(is_null(getDefaultCluster())) {
 
 if(!exists("dCluster")) {
   dCluster <- new_cluster(n_cores-1)
-  cluster_library(dCluster, installed_req_pkgs)
+  cluster_library_quiety <- purrr::quietly(cluster_library)
+  cluster_library_quiety(dCluster, installed_req_pkgs)
 }
 
 ## get order history line data 
