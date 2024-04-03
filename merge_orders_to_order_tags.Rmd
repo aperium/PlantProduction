@@ -23,7 +23,7 @@ output:
 ```{r setup, echo=FALSE, error=TRUE, message=TRUE, warning=TRUE, include=FALSE}
 # this block loads required packages and some custom functions. 
 
-cran_pacs <- c("rlang", "pkgbuild","librarian", "pak", "rmarkdown", "tidyselect", "tidyverse", "magrittr", "stats", "measurements", "knitr", "foreach", "doParallel", "parallel", "fs", "janitor", "stringr", "readxl", "writexl","fuzzyjoin", "chromote", "pdftools", "lubridate", "readr", "tidyr", "forcats", "purrr", "stringdist", "bigmemory", "multidplyr") |> unique() # "rvest", "polite", "XML", "tabulizer", "gt"
+cran_pacs <- c("rlang", "pkgbuild","librarian", "pak", "rmarkdown", "tidyselect", "tidyverse", "magrittr", "stats", "measurements", "knitr", "foreach", "doParallel", "parallel", "fs", "janitor", "stringr", "readxl", "writexl","fuzzyjoin", "chromote", "pdftools", "lubridate", "readr", "tidyr", "forcats", "purrr", "stringdist", "multidplyr") |> unique() # "rvest", "polite", "XML", "tabulizer", "gt", "bigmemory"
 dev_pacs <- c() ## "aperium/rutil")
 bioc_pacs <- c("Biostrings") #,"msa")
 py_pacs <- c("camelot-py")
@@ -506,7 +506,7 @@ aligned %<>%
 
 
 
-```{r export}
+```{r export, eval=FALSE}
 dir_path <- plants_dir
 
 aligned |>
