@@ -137,6 +137,84 @@ column_not_empty = function(x) not(all(check_empty(x)))
 remove_empties = function(x) x %>% dplyr::select(where(column_not_empty)) %>% janitor::remove_empty()
 
 
+## an alignment function for similar names
+pairwiseAlightmentMatch = function(x,y) {Biostrings::pairwiseAlignment(x,y,scoreOnly = TRUE) > 0}
+
+# name order function. Pulls out words and sorts them. Vectorized.
+string_alignment_prep <- function(x) {
+  prep_one <- function(y) {
+    y |> 
+      stringr::str_to_lower() |>
+      stringr::str_replace_all("(?<=[:alnum:])[:punct:](?=[:alnum:])"," ") |>
+      stringr::str_remove_all("[:punct:]|®|™") |>
+      stringr::str_remove_all("(?<=([:space:]|^))(herb)|(he)|(vf)(?=([:space:]|$))") |>
+      stringr::str_extract_all("([:alpha:]{2,})|(([:digit:]*(\\.[:digit:]+)?)(?!c$))", simplify = TRUE) |> 
+      stringr::str_squish() |> 
+      stringr::str_unique() |> 
+      as.character() |> 
+      stringr::str_sort() |> 
+      stringr::str_flatten(collapse = " ")
+  }
+  sapply(x, prep_one)
+}
+
+# this is a two-way name match. Matches are true if the best match x -> y is also the best match y -> x. Vectorized. 
+name_match <- function(x,y) {
+
+  x_u <- x |> stringr::str_unique()
+  y_u <- y |> stringr::str_unique()
+  
+  xy_intersect <- generics::intersect(x_u, y_u)
+  x_u <- generics::setdiff(x_u,xy_intersect)
+  y_u <- generics::setdiff(y_u,xy_intersect)
+  
+  if((length(x_u) == 0)&(length(y_u) == 0)) {
+    out1 <- mapply(\(m,n) {stringr::str_equal(m,n,ignore_case = TRUE)},x,y)
+    return(out1)
+  }
+  
+  # print(1)
+
+  doParallel::registerDoParallel(cores=n_cores-1)
+  scores <- foreach::foreach(i=1:length(y_u), .combine = rbind, .export = "string_alignment_prep") %dopar% {
+    # print("1a")
+    raw_score <- Biostrings::pairwiseAlignment(x_u |> string_alignment_prep(), y_u[i] |> string_alignment_prep(),scoreOnly = TRUE)
+    dplyr::if_else(raw_score>=0,raw_score,-stringr::str_length(paste0(x_u, y_u[i]))/raw_score)
+  } |> unlist()
+  # print("1b")
+  doParallel::stopImplicitCluster()
+
+  # print(2)
+  
+  y_loc <- apply(scores, 2, which.max) |> unname() |> as.integer()
+  x_loc <- apply(scores, 1, which.max) |> unname() |> as.integer()
+
+  x_y_index <- foreach(j=1:length(x_loc), .combine = rbind) %do% c(xname = x_u[x_loc[j]], yname = y_u[j], xi = x_loc[j] |> as.integer(), yi = j |> as.integer())
+  y_x_index <- foreach(i=1:length(y_loc), .combine = rbind) %do% c(yname = y_u[y_loc[i]], xname = x_u[i], yi = y_loc[i] |> as.integer(), xi = i |> as.integer())
+
+  # print(3)
+  
+  joined_index = inner_join(x_y_index |> as_tibble(),y_x_index |> as_tibble()) |>
+    mutate(yi = yi |> as.integer(),
+           xi = xi |> as.integer(),
+           score = scores[yi*xi],
+           lmax = pmax(str_length(yname),str_length(xname)),
+           lmin = pmin(str_length(yname),str_length(xname)),
+           # score_adj = -(lmax)/score,
+           score_adj = if_else(score>=0,score,score/(lmax*lmin)))
+  
+  # TODO ? re-match using the unmatched items from each list. Could also reject matches below a cutoff score.
+  
+  # print(4)
+
+  out2 <- mapply(\(m,n) {str_equal(m,n,ignore_case = TRUE)|str_equal(joined_index$yname[match(m,joined_index$xname)],n,ignore_case = TRUE)},x,y) |>
+    sapply(\(x) {
+      if(is.na(x)) FALSE
+      else x
+      })
+  return(out2)
+}
+
 ```
 
 
