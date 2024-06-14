@@ -22,49 +22,44 @@ bioc_pacs <- c("Biostrings")
 py_pacs <- c()
 
 ## function to quietly find list of packages
-find_package_quiet <- function(pkgs) unlist(find.package(pkgs, quiet = TRUE))
-install_as_needed <- function(pacs, inst_fun = install.packages, check_fun = find_package_quiet) {
-  inst_fun(setdiff(pacs,names(unlist(sapply(pacs,check_fun)))))
+find_package_quiet <- function(pkgs, ...) unlist(find.package(pkgs, quiet = TRUE, ...))
+install_as_needed <- function(pacs, inst_fun = install.packages, check_fun = find_package_quiet, ...) {
+  inst_fun(setdiff(pacs,names(unlist(sapply(pacs,\(x) check_fun(x))))),...)
 }
 
 # install cran packs
-if (length(cran_pacs) > 0) install_as_needed(cran_pacs,install.packages)
+if (length(cran_pacs) > 0) install_as_needed(cran_pacs,install.packages, quiet = TRUE)
 
 # install github dev packs
 if (length(dev_pacs)>0) {
-  if (!require("pak", quietly = TRUE)) install.packages("pak")
-  install_as_needed(dev_pacs,pak::pak)
+  if (!requireNamespace("pak", quietly = TRUE)[]) install.packages("pak", quiet = TRUE)
+  install_as_needed(dev_pacs,pak::pak, ask = FALSE, upgrade = TRUE)
 }
 
 # install bioc packs
 if (length(bioc_pacs)>0) {
-  if (!require("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+  if (!requireNamespace("BiocManager", quietly = TRUE)[]) install.packages("BiocManager", quiet = TRUE)
   # install_as_needed(c("DBI","xfun"))
-  bio_instal_quiet <- function(...) BiocManager::install(..., update = FALSE, ask=FALSE)
   BiocManager::install(version = "3.18", update = FALSE, ask=FALSE)
-  install_as_needed(bioc_pacs,bio_instal_quiet)
+  install_as_needed(bioc_pacs,BiocManager::install, update = FALSE, ask=FALSE)
 }
 
-
+if (!requireNamespace("librarian", quietly = TRUE)[]) install.packages("librarian", quiet = TRUE)
+if (!requireNamespace("pak", quietly = TRUE)[]) install.packages("pak", quiet = TRUE)
 librarian::shelf(cran_pacs, bioc_pacs, dev_pacs, quiet = TRUE)
 installed_req_pkgs <- pak::pkg_status(c(cran_pacs, bioc_pacs, dev_pacs))$package
-loaded_pacs <- search() |> str_extract("(?<=:).*$") |> na.omit()
+loaded_pacs <- search() |> stringr::str_extract("(?<=:).*$") |> na.omit()
 
 
 # install python packs
-if ("reticulate" %in% loaded_pacs) {
-  if (!reticulate::py_available(initialize = TRUE)) install_python() 
-  if (py_available(initialize = TRUE) & (length(py_pacs)>0)) {
-    # py_exe()
-    # py_list_packages()$package
-    py_install(py_pacs)
-    # py_list_packages_names <- function(...) py_list_packages(...)$package
-    # install_as_needed(py_pacs, py_install, py_list_packages_names)
-  }
+if (length(py_pacs)>0) {
+  if (!requireNamespace("reticulate", quietly = TRUE)[]) install.packages("reticulate", quiet = TRUE)
+  if (!reticulate::py_available(initialize = TRUE)) reticulate::install_python()
+  if (reticulate::py_available(initialize = TRUE)) reticulate::py_install(py_pacs)
 }
 
-if((("readxl" %in% installed_req_pkgs)&is_empty(find_package_quiet("readxl")))|(("writexl" %in% installed_req_pkgs)&is_empty(find_package_quiet("writexl")))) librarian::shelf("ycphs/openxlsx") #load openxlsx if read-/write-xl not avail
-if(((("readxl" %in% installed_req_pkgs)&is_empty(find_package_quiet("readxl")))|(("writexl" %in% installed_req_pkgs)&is_empty(find_package_quiet("writexl"))))&(is_empty(find_package_quiet("openxlsx")))) librarian::shelf("colearendt/xlsx") # load xlsx if openxlsx not avail
+# if((("readxl" %in% installed_req_pkgs)&is_empty(find_package_quiet("readxl")))|(("writexl" %in% installed_req_pkgs)&is_empty(find_package_quiet("writexl")))) librarian::shelf("ycphs/openxlsx") #load openxlsx if read-/write-xl not avail
+# if(((("readxl" %in% installed_req_pkgs)&is_empty(find_package_quiet("readxl")))|(("writexl" %in% installed_req_pkgs)&is_empty(find_package_quiet("writexl"))))&(is_empty(find_package_quiet("openxlsx")))) librarian::shelf("colearendt/xlsx") # load xlsx if openxlsx not avail
 
 ## detecting and setting the cores to use
 n_cores <- parallel::detectCores()
@@ -72,6 +67,16 @@ n_cores <- parallel::detectCores()
 # registerDoParallel(cores=n_cores-1)
 # stopImplicitCluster()
 
+if(is_null(getDefaultCluster())) {
+  makeCluster(n_cores-1) |> setDefaultCluster()
+  registerDoParallel(getDefaultCluster())
+}
+
+if(!exists("dCluster")) {
+  dCluster <- new_cluster(n_cores-1)
+  cluster_library_quiety <- purrr::quietly(cluster_library)
+  cluster_library_quiety(dCluster, installed_req_pkgs)
+}
 
 ```
 
@@ -909,4 +914,13 @@ merging <- full_join(CP_alighning, ball_filtersummary, by=join_by("Ball_uid","ye
   select(any_of(year, `Item number`, Size, Description, Variety, `PO Number`,`Material Group Description`, `Ball Material Number`, Supplier, Quantity.GG, Quantity.FS, PW_uid, Ball_uid))
 
 
+```
+
+
+```{r terminateClusters, eval=FALSE}
+# dplyr cluster
+if(exists("dCluster")) rm(dCluster)
+
+# doParallel cluster
+if(!is_null(getDefaultCluster())) stopCluster(getDefaultCluster())
 ```
