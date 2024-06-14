@@ -16,7 +16,7 @@ output:
 
 #req_pkgs <- c("devtools", "rlang", "pkgbuild", "rmarkdown", "librarian", "BiocManager", "magrittr", "tidyselect", "tidyverse", "lubridate", "stats", "readr", "measurements", "knitr", "tidyr", "foreach", "forcats", "doParallel", "parallel", "fs", "purrr", "janitor", "readxl", "writexl", "fuzzyjoin", "Biostrings") # , "openxlsx", "xlsx", "gt", "plyr","bibtex","ggpubr","ggplot2", "ggpmisc", "firatheme", "stringdist", "pwr", "effectsize", "zipcodeR", "chromote", "rvest"
 #
-cran_pacs <- c("rlang", "pkgbuild","rmarkdown", "BiocManager", "tidyselect", "tidyverse", "magrittr", "stats", "measurements", "knitr", "foreach", "doParallel", "parallel", "fs", "janitor", "readxl", "writexl","fuzzyjoin", "plyr", "stringdist") 
+cran_pacs <- c("rlang", "pkgbuild","rmarkdown", "BiocManager", "tidyselect", "tidyverse", "magrittr", "stats", "measurements", "knitr", "foreach", "doParallel", "parallel", "fs", "janitor", "readxl", "writexl","fuzzyjoin", "plyr", "stringdist", "multidplyr") 
 dev_pacs <- c() ## "aperium/rutil" 
 bioc_pacs <- c("Biostrings")
 py_pacs <- c()
