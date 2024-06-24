@@ -3,6 +3,7 @@ title: Combining orders from Ball and Express for Spring 2024
 author: Daniel R. Williams ^[Director of Quality Control, Greenstreet Growers, Lothian,
   MD] ^[PhD Candidate, Dept. of Ag. & Crop Science, Ohio State University, Columbus,  Ohio]
 date: 3 April 2023
+updated: 24 June 2024
 output:
   pdf_document: default
   html_notebook: default
@@ -233,12 +234,13 @@ string_alignment_alike <- Vectorize(function(x,y) {
 
 # test <- Vectorize(string_alignment_alike)
 
-string_alignment_alike(c("plug 288","lin pw 72","Pot 1gal","SD 5K","lin 32lp","32-tray"),c("tray 288","tray 72","point of purchase","pack 5K","tray 32","32 tray"))
+# string_alignment_alike(c("plug 288","lin pw 72","Pot 1gal","SD 5K","lin 32lp","32-tray"),c("tray 288","tray 72","point of purchase","pack 5K","tray 32","32 tray"))
 
 ```
 
 
-```{r datasetup, echo=TRUE, error=TRUE, message=FALSE, warning=TRUE}
+```{r datasetup, echo=TRUE, error=TRUE, message=FALSE, warning=TRUE, eval=FALSE}
+# skipping for single-file reading
 
 if(is_null(getDefaultCluster())) {
   makeCluster(n_cores-1) |> setDefaultCluster()
@@ -319,11 +321,67 @@ mtag_orders <- foreach::foreach(i=order_files(mtag_files, baseName = mtag_baseNa
 
 ```
 
+```{r singlefileimport}
+
+e_orders <- tibble()
+
+e_orders_file <- "Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstreet/Production Planning QC/Plant Sales and Orders/2024/Pansy&Kale 2024" |> fs::path_home() |> fs::path("express_shipped_orders_fall_2023.xlsx")
+
+e_delivered <- read_xlsx_flex(e_orders_file, guess_max = as.integer(.Machine$integer.max/100)) |>
+    janitor::remove_empty("rows") |>
+    dplyr::distinct() |>
+   dplyr::filter(!is.na(`Order #`)) |> 
+  janitor::remove_empty()
+
+
+b_file <- "Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstreet/Production Planning QC/Plant Sales and Orders/2024/Pansy&Kale 2024" |> fs::path_home() |> fs::path("Ball order_download_20240624075842.xlsx")
+
+b_orders <- read_xlsx_flex(b_file, guess_max = as.integer(.Machine$integer.max/100)) |>
+    dplyr::mutate(vendor = "Ball",
+                 "Order Number" = `Order Number` |> as.character(),
+                 "Sales Order Date" = `Sales Order Date` |> lubridate::ymd(),
+                 "Ship Date" = `Ship Date` |> lubridate::ymd(),
+                 "Total Extended Value" = `Total Extended Value` |> as.numeric(),
+                 "Order Line" = `Order Line` |> stringr::str_extract("[:digit:]*"),
+                 "Ship Week" = `Ship Week` |> stringr::str_extract("[:digit:]*[:graph:]?[:digit:]*"),
+                 "Case Count" = `Case Count` |> stringr::str_extract("[:digit:]*[:punct:]?[:digit:]*"),
+                 "Unit Price" = `Unit Price` |> stringr::str_extract("[:digit:]*[:punct:]?[:digit:]*"),
+                 "Royalty" = `Royalty` |> stringr::str_extract("[:digit:]*[:punct:]?[:digit:]*"),
+                 "Tags" = `Tags` |> stringr::str_extract("[:digit:]*[:punct:]?[:digit:]*"),
+                 "Freight" = `Freight` |> stringr::str_extract("[:digit:]*[:punct:]?[:digit:]*"),
+                 "Total Unit Rate" = `Total Unit Rate` |> stringr::str_extract("[:digit:]*[:punct:]?[:digit:]*")) |> 
+    dplyr::select(!any_of(c("Not Used1","Not Used2"))) |>
+    janitor::remove_empty("rows") |>
+    dplyr::distinct() |>
+    dplyr::filter(!is.na(`Order Number`)) |> 
+  janitor::remove_empty() |>
+  unite(col = "Description", any_of(c("Class","Variety")), sep = " ", remove = FALSE)
+
+
+## special filters
+start_date <- "08-01-2023" |> mdy() |> as.POSIXct() |> as_date() |> is.Date()
+end_date <- "10-31-2023" |> mdy()
+
+e_delivered <- e_delivered |>
+  mutate(across(where(is.POSIXct),as_date)) |>
+  filter(`Ship Date` >= start_date,
+         `Ship Date` <= end_date)
+
+b_orders <- b_orders |> 
+  mutate(across(where(is.Date),as_date)) |>
+  filter(`Ship Date` >= start_date,
+         `Ship Date` <= end_date)
+
+
+```
+
 
 ```{r e_b_join}
 
-e_combined <- dplyr::full_join(e_orders, e_delivered) |>
-  select("Order #", "Customer PO #", "Order Date", "Ship Date", "Week", "Product #", "Description", "Supplier", "QTY Ordered", "Total") |>
+#skip this for single-file imports
+e_combined <- e_delivered |>
+# e_combined <- dplyr::full_join(e_orders, e_delivered) |>
+#   select("Order #", "Customer PO #", "Order Date", "Ship Date", "Week", "Product #", "Description", "Supplier", "QTY Ordered", "Total") |>
   mutate(vendor = "Express")
 
 
