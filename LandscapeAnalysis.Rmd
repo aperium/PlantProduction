@@ -38,7 +38,7 @@ if (length(dev_pacs)>0) {
 if (length(bioc_pacs)>0) {
   if (!requireNamespace("BiocManager", quietly = TRUE)[]) install.packages("BiocManager", quiet = TRUE)
   # install_as_needed(c("DBI","xfun"))
-  BiocManager::install(version = "3.18", update = FALSE, ask=FALSE)
+  BiocManager::install(version = "3.19", update = FALSE, ask=FALSE)
   install_as_needed(bioc_pacs,BiocManager::install, update = FALSE, ask=FALSE)
 }
 
