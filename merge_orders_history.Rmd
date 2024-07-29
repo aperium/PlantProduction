@@ -20,50 +20,53 @@ dev_pacs <- c() ## "aperium/rutil")
 bioc_pacs <- c("Biostrings") #,"msa")
 py_pacs <- c("camelot-py")
 
+UPDATE <- FALSE
+QUIET <- FALSE
+ASK <- FALSE
+
 ## function to quietly find list of packages
-find_package_quiet <- function(pkgs, ...) unlist(find.package(pkgs, quiet = TRUE, ...))
+find_package_quiet <- function(pkgs, ...) unlist(find.package(pkgs, quiet = QUIET, ...))
 install_as_needed <- function(pacs, inst_fun = install.packages, check_fun = find_package_quiet, ...) {
   inst_fun(setdiff(pacs,names(unlist(sapply(pacs,\(x) check_fun(x))))),...)
 }
 
 # install cran packs
-if (length(cran_pacs) > 0) install_as_needed(cran_pacs,install.packages, quiet = TRUE)
+if (length(cran_pacs) > 0) install_as_needed(cran_pacs,install.packages, quiet = QUIET)
 
 # install github dev packs
 if (length(dev_pacs)>0) {
-  if (!requireNamespace("pak", quietly = TRUE)[]) install.packages("pak", quiet = TRUE)
-  install_as_needed(dev_pacs,pak::pak, ask = FALSE, upgrade = TRUE)
+  if (!requireNamespace("pak", quietly = QUIET)[]) install.packages("pak", quiet = QUIET)
+  install_as_needed(dev_pacs,pak::pak, ask = ASK, upgrade = UPDATE)
 }
 
 # install bioc packs
 if (length(bioc_pacs)>0) {
-  if (!requireNamespace("BiocManager", quietly = TRUE)[]) install.packages("BiocManager", quiet = TRUE)
+  if (!requireNamespace("BiocManager", quietly = QUIET)[]) install.packages("BiocManager", quiet = QUIET)
+  require(BiocManager)
   # install_as_needed(c("DBI","xfun"))
-  BiocManager::install(version = "3.19", update = TRUE, ask=FALSE)
-  install_as_needed(bioc_pacs,BiocManager::install, update = TRUE, ask=FALSE)
+  BiocManager::install(version = "3.19", update = UPDATE, ask=ASK)
+  install_as_needed(bioc_pacs,inst_fun = BiocManager::install, update = UPDATE, ask=ASK)
+  # install_as_needed(bioc_pacs,install.packages, repos = BiocManager::repositories(), update = UPDATE, ask=ASK)
 }
 
-if (!requireNamespace("librarian", quietly = TRUE)[]) install.packages("librarian", quiet = TRUE)
-if (!requireNamespace("pak", quietly = TRUE)[]) install.packages("pak", quiet = TRUE)
-librarian::shelf(cran_pacs, bioc_pacs, dev_pacs, quiet = TRUE)
+if (!requireNamespace("librarian", quietly = QUIET)[]) install.packages("librarian", quiet = QUIET)
+if (!requireNamespace("pak", quietly = QUIET)[]) install.packages("pak", quiet = QUIET)
+librarian::shelf(cran_pacs, bioc_pacs, dev_pacs, quiet = QUIET)
 installed_req_pkgs <- pak::pkg_status(c(cran_pacs, bioc_pacs, dev_pacs))$package
 loaded_pacs <- search() |> stringr::str_extract("(?<=:).*$") |> na.omit()
 
 
 # install python packs
 if (length(py_pacs)>0) {
-  if (!requireNamespace("reticulate", quietly = TRUE)[]) install.packages("reticulate", quiet = TRUE)
+  if (!requireNamespace("reticulate", quietly = QUIET)[]) install.packages("reticulate", quiet = QUIET)
   if (!reticulate::py_available(initialize = TRUE)) reticulate::install_python()
   if (reticulate::py_available(initialize = TRUE)) reticulate::py_install(py_pacs)
 }
-
 
 ## register cores for foreach
 n_cores <- parallel::detectCores()
 # registerDoParallel(cores=n_cores)
 # stopImplicitCluster()
-
-
 
 # doParallel cluster
 if(!is_null(getDefaultCluster())) stopCluster(getDefaultCluster())
