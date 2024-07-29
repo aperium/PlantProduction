@@ -53,6 +53,8 @@ if (!requireNamespace("librarian", quietly = QUIET)[]) install.packages("librari
 if (!requireNamespace("pak", quietly = QUIET)[]) install.packages("pak", quiet = QUIET)
 librarian::shelf(cran_pacs, bioc_pacs, dev_pacs, quiet = QUIET)
 installed_req_pkgs <- pak::pkg_status(c(cran_pacs, bioc_pacs, dev_pacs))$package
+# make sure everything is loaded
+installed_req_pkgs |> sapply(require, character.only = TRUE, quietly = QUIET)
 loaded_pacs <- search() |> stringr::str_extract("(?<=:).*$") |> na.omit()
 
 
@@ -62,11 +64,6 @@ if (length(py_pacs)>0) {
   if (!reticulate::py_available(initialize = TRUE)) reticulate::install_python()
   if (reticulate::py_available(initialize = TRUE)) reticulate::py_install(py_pacs)
 }
-
-# make sure everything is loaded
-c(cran_pacs,dev_pacs,bioc_pacs,py_pacs) |> 
-  unique() |> 
-  sapply(require, character.only = TRUE)
 
 ## register cores for foreach
 n_cores <- parallel::detectCores()
