@@ -63,6 +63,11 @@ if (length(py_pacs)>0) {
   if (reticulate::py_available(initialize = TRUE)) reticulate::py_install(py_pacs)
 }
 
+# make sure everything is loaded
+c(cran_pacs,dev_pacs,bioc_pacs,py_pacs) |> 
+  unique() |> 
+  sapply(require, character.only = TRUE)
+
 ## register cores for foreach
 n_cores <- parallel::detectCores()
 # registerDoParallel(cores=n_cores)
@@ -257,11 +262,11 @@ tags_dir <- "Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstr
 #   read_xlsx_flex(guess_max = as.integer(.Machine$integer.max/100)) |> 
 #   janitor::remove_empty()
 
-# this is a bit excessive, becaues it really only makes sense to read in the latest open orders file. I've updated to only read the latestest open orders file.
+# this is a bit excessive, because it really only makes sense to read in the latest open orders file. I've updated to only read the latest open orders file.
 e_orders_baseName <- "express_open_orders_"
 e_orders_files <- plants_dir |> fs::path("Express Seed export") |> fs::dir_ls() |> fs::path_filter(regex = paste0(e_orders_baseName,".*\\.xlsx"))
 e_orders <- foreach::foreach(i=order_files(e_orders_files, baseName = e_orders_baseName, parseFun = ymd) |> max(), .combine = \(x,y) dplyr::rows_upsert(x,y,by = c("Order #", "Purchase Order #", "Customer PO #", "Order Date", "Product #", "Supplier", "QTY Ordered"))) %dopar% { 
-  read_xlsx_flex(e_orders_files[i], guess_max = as.integer(.Machine$integer.max/100)) |>
+  read_xlsx(e_orders_files[i], guess_max = as.integer(.Machine$integer.max/100)) |>
     janitor::remove_empty("rows") |>
     dplyr::distinct() |>
    dplyr::filter(!is.na(`Order #`))
