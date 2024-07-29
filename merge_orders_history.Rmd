@@ -17,11 +17,11 @@ output:
 
 cran_pacs <- c("rlang", "pkgbuild","librarian", "pak", "rmarkdown", "tidyselect", "tidyverse", "magrittr", "stats", "measurements", "knitr", "foreach", "doParallel", "parallel", "fs", "janitor", "stringr", "readxl", "writexl","fuzzyjoin", "chromote", "pdftools", "lubridate", "readr", "tidyr", "forcats", "purrr", "stringdist", "multidplyr") |> unique() # "rvest", "polite", "XML", "tabulizer", "gt", "bigmemory"
 dev_pacs <- c() ## "aperium/rutil")
-bioc_pacs <- c("Biostrings") #,"msa")
+bioc_pacs <- c("Biostrings", "pwalign") #,"msa")
 py_pacs <- c("camelot-py")
 
 UPDATE <- FALSE
-QUIET <- FALSE
+QUIET <- TRUE
 ASK <- FALSE
 
 ## function to quietly find list of packages
@@ -43,10 +43,9 @@ if (length(dev_pacs)>0) {
 if (length(bioc_pacs)>0) {
   if (!requireNamespace("BiocManager", quietly = QUIET)[]) install.packages("BiocManager", quiet = QUIET)
   require(BiocManager)
-  # install_as_needed(c("DBI","xfun"))
   BiocManager::install(version = "3.19", update = UPDATE, ask=ASK)
-  install_as_needed(bioc_pacs,inst_fun = BiocManager::install, update = UPDATE, ask=ASK)
-  # install_as_needed(bioc_pacs,install.packages, repos = BiocManager::repositories(), update = UPDATE, ask=ASK)
+  # install_as_needed(bioc_pacs,inst_fun = BiocManager::install, update = UPDATE, ask=ASK)
+  BiocManager::install(bioc_pacs, update = UPDATE, ask=ASK)
 }
 
 if (!requireNamespace("librarian", quietly = QUIET)[]) install.packages("librarian", quiet = QUIET)
@@ -56,7 +55,6 @@ installed_req_pkgs <- pak::pkg_status(c(cran_pacs, bioc_pacs, dev_pacs))$package
 # make sure everything is loaded
 installed_req_pkgs |> sapply(require, character.only = TRUE, quietly = QUIET)
 loaded_pacs <- search() |> stringr::str_extract("(?<=:).*$") |> na.omit()
-
 
 # install python packs
 if (length(py_pacs)>0) {
@@ -239,7 +237,7 @@ string_alignment_alike <- Vectorize(function(x,y) {
 
 # test <- Vectorize(string_alignment_alike)
 
-# string_alignment_alike(c("plug 288","lin pw 72","Pot 1gal","SD 5K","lin 32lp","32-tray"),c("tray 288","tray 72","point of purchase","pack 5K","tray 32","32 tray"))
+string_alignment_alike(c("plug 288","lin pw 72","Pot 1gal","SD 5K","lin 32lp","32-tray"),c("tray 288","tray 72","point of purchase","pack 5K","tray 32","32 tray"))
 
 ```
 
@@ -262,7 +260,7 @@ tags_dir <- "Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstr
 # this is a bit excessive, because it really only makes sense to read in the latest open orders file. I've updated to only read the latest open orders file.
 e_orders_baseName <- "express_open_orders_"
 e_orders_files <- plants_dir |> fs::path("Express Seed export") |> fs::dir_ls() |> fs::path_filter(regex = paste0(e_orders_baseName,".*\\.xlsx"))
-e_orders <- foreach::foreach(i=order_files(e_orders_files, baseName = e_orders_baseName, parseFun = ymd) |> max(), .combine = \(x,y) dplyr::rows_upsert(x,y,by = c("Order #", "Purchase Order #", "Customer PO #", "Order Date", "Product #", "Supplier", "QTY Ordered"))) %dopar% { 
+e_orders <- foreach::foreach(i=order_files(e_orders_files, baseName = e_orders_baseName, parseFun = ymd) |> max(), .combine = \(x,y) dplyr::rows_upsert(x,y,by = c("Order #", "Purchase Order #", "Customer PO #", "Order Date", "Product #", "Supplier", "QTY Ordered")), .packages = c("readxl")) %dopar% { 
   read_xlsx(e_orders_files[i], guess_max = as.integer(.Machine$integer.max/100)) |>
     janitor::remove_empty("rows") |>
     dplyr::distinct() |>
@@ -275,8 +273,8 @@ e_orders <- foreach::foreach(i=order_files(e_orders_files, baseName = e_orders_b
 
 e_delivered_baseName <- "express_shipped_orders_"
 e_delivered_files <- plants_dir |> fs::path("Express Seed export") |> fs::dir_ls() |> fs::path_filter(regex = paste0(e_delivered_baseName,".*\\.xlsx"))
-e_delivered <- foreach::foreach(i=order_files(e_delivered_files, baseName = e_delivered_baseName, parseFun = ymd), .combine = \(x,y) dplyr::rows_upsert(x,y,by = c("Order #", "Purchase Order #", "Customer PO #", "Order Date", "Product #", "Supplier", "QTY Ordered"))) %dopar% { 
-  read_xlsx_flex(e_delivered_files[i], guess_max = as.integer(.Machine$integer.max/100)) |>
+e_delivered <- foreach::foreach(i=order_files(e_delivered_files, baseName = e_delivered_baseName, parseFun = ymd), .combine = \(x,y) dplyr::rows_upsert(x,y,by = c("Order #", "Purchase Order #", "Customer PO #", "Order Date", "Product #", "Supplier", "QTY Ordered")), .packages = c("readxl")) %dopar% { 
+  read_xlsx(e_delivered_files[i], guess_max = as.integer(.Machine$integer.max/100)) |>
     janitor::remove_empty("rows") |>
     dplyr::distinct() |>
    dplyr::filter(!is.na(`Order #`))
@@ -284,8 +282,8 @@ e_delivered <- foreach::foreach(i=order_files(e_delivered_files, baseName = e_de
 
 b_baseName <- "order_download_"
 b_files <- plants_dir |> fs::path("Ball export") |> fs::dir_ls() |> fs::path_filter(regex = paste0(b_baseName,".*\\.xlsx"))
-b_orders <- foreach::foreach(i=order_files(b_files, baseName = b_baseName, parseFun = ymd_hms), .combine = \(x,y) dplyr::rows_upsert(x,y,by = c("Order Number", "Order Line"))) %dopar% { 
-  read_xlsx_flex(b_files[i], guess_max = as.integer(.Machine$integer.max/100)) |>
+b_orders <- foreach::foreach(i=order_files(b_files, baseName = b_baseName, parseFun = ymd_hms), .combine = \(x,y) dplyr::rows_upsert(x,y,by = c("Order Number", "Order Line")), .packages = c("readxl")) %dopar% { 
+  read_xlsx(b_files[i], guess_max = as.integer(.Machine$integer.max/100)) |>
     dplyr::mutate(vendor = "Ball",
                  "Order Number" = `Order Number` |> as.character(),
                  "Sales Order Date" = `Sales Order Date` |> lubridate::ymd(),
@@ -299,7 +297,7 @@ b_orders <- foreach::foreach(i=order_files(b_files, baseName = b_baseName, parse
                  "Tags" = `Tags` |> stringr::str_extract("[:digit:]*[:punct:]?[:digit:]*"),
                  "Freight" = `Freight` |> stringr::str_extract("[:digit:]*[:punct:]?[:digit:]*"),
                  "Total Unit Rate" = `Total Unit Rate` |> stringr::str_extract("[:digit:]*[:punct:]?[:digit:]*"),
-                 "Material Format" = string_alignment_alike()) |> 
+                 "Material Format" = string_alignment_alike()) |> ##TODO
     dplyr::select(!any_of(c("Not Used1","Not Used2"))) |>
     janitor::remove_empty("rows") |>
     dplyr::distinct() |>
