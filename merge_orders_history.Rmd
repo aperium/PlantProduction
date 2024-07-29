@@ -53,7 +53,7 @@ if (!requireNamespace("pak", quietly = QUIET)[]) install.packages("pak", quiet =
 librarian::shelf(cran_pacs, bioc_pacs, dev_pacs, quiet = QUIET)
 installed_req_pkgs <- pak::pkg_status(c(cran_pacs, bioc_pacs, dev_pacs))$package
 # make sure everything is loaded
-installed_req_pkgs |> sapply(require, character.only = TRUE, quietly = QUIET)
+installed_req_pkgs |> sapply(requireNamespace, character.only = TRUE, quietly = QUIET)
 loaded_pacs <- search() |> stringr::str_extract("(?<=:).*$") |> na.omit()
 
 # install python packs
@@ -77,6 +77,7 @@ registerDoParallel(getDefaultCluster())
 if(exists("dCluster")) rm(dCluster)
 dCluster <- new_cluster(n_cores-1)
 cluster_library_quiety <- purrr::quietly(cluster_library)
+# cluster_library_quiety(dCluster, loadedNamespaces())
 cluster_library_quiety(dCluster, installed_req_pkgs)
 
 ```
