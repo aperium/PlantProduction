@@ -15,14 +15,18 @@ output:
 ```{r setup, echo=FALSE, error=TRUE, message=TRUE, warning=TRUE, include=FALSE}
 # this block loads required packages and some custom functions. 
 
-cran_pacs <- c("rlang", "pkgbuild","librarian", "pak", "rmarkdown", "tidyselect", "tidyverse", "magrittr", "stats", "measurements", "knitr", "foreach", "doParallel", "parallel", "fs", "janitor", "stringr", "readxl", "writexl","fuzzyjoin", "chromote", "pdftools", "lubridate", "readr", "tidyr", "forcats", "purrr", "stringdist", "multidplyr", "odbc") |> unique() # "rvest", "polite", "XML", "tabulizer", "gt", "bigmemory"
-dev_pacs <- c() ## "aperium/rutil")
+cran_pacs <- c("rlang", "pkgbuild","librarian", "pak", "rmarkdown", "tidyselect", "tidyverse", "magrittr", "stats", "measurements", "knitr", "foreach", "doParallel", "parallel", "fs", "janitor", "stringr", "readxl", "writexl","fuzzyjoin", "chromote", "pdftools", "lubridate", "readr", "tidyr", "forcats", "purrr", "stringdist", "multidplyr") |> unique() # "rvest", "polite", "XML", "tabulizer", "gt", "bigmemory", "odbc"
+dev_pacs <- c("r-dbi/odbc") ## "aperium/rutil")
 bioc_pacs <- c("Biostrings", "pwalign") #,"msa")
 py_pacs <- c("camelot-py")
 
 UPDATE <- FALSE
-QUIET <- TRUE
+QUIET <- FALSE
 ASK <- FALSE
+
+# packlist <- c(cran_pacs, bioc_pacs, dev_pacs) 
+# for (x in packlist) {packlist |> sapply(\(x) try(unloadNamespace(x)))}
+# loadedNamespaces()
 
 ## function to quietly find list of packages
 find_package_quiet <- function(pkgs, ...) unlist(find.package(pkgs, quiet = QUIET, ...))
@@ -238,7 +242,7 @@ string_alignment_alike <- Vectorize(function(x,y) {
 
 # test <- Vectorize(string_alignment_alike)
 
-string_alignment_alike(c("plug 288","lin pw 72","Pot 1gal","SD 5K","lin 32lp","32-tray"),c("tray 288","tray 72","point of purchase","pack 5K","tray 32","32 tray"))
+# string_alignment_alike(c("plug 288","lin pw 72","Pot 1gal","SD 5K","lin 32lp","32-tray"),c("tray 288","tray 72","point of purchase","pack 5K","tray 32","32 tray"))
 
 ```
 
@@ -381,12 +385,11 @@ b_orders <- b_orders |>
 
 ```{r import_odbc, eval=FALSE}
 
-odbcListDataSources()
+odbc::odbcListDataSources() |> tail(1) |> select(1) |> unlist()
 
-odbcListDrivers()
+odbc::odbcListDrivers()
 
-con <- DBI::dbConnect(odbc::odbc(), dsn = "CounterPoint",
-                      driver = "SQL Server")
+con <- DBI::dbConnect(drv = odbc::odbc(), dsn = odbc::odbcListDataSources() |> tail(1) |> select(1) |> unlist())
 
 
 
