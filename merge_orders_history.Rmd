@@ -15,7 +15,7 @@ output:
 ```{r setup, echo=FALSE, error=TRUE, message=TRUE, warning=TRUE, include=FALSE}
 # this block loads required packages and some custom functions. 
 
-cran_pacs <- c("rlang", "pkgbuild","librarian", "pak", "rmarkdown", "tidyselect", "tidyverse", "magrittr", "stats", "measurements", "knitr", "foreach", "doParallel", "parallel", "fs", "janitor", "stringr", "readxl", "writexl","fuzzyjoin", "chromote", "pdftools", "lubridate", "readr", "tidyr", "forcats", "purrr", "stringdist", "multidplyr") |> unique() # "rvest", "polite", "XML", "tabulizer", "gt", "bigmemory"
+cran_pacs <- c("rlang", "pkgbuild","librarian", "pak", "rmarkdown", "tidyselect", "tidyverse", "magrittr", "stats", "measurements", "knitr", "foreach", "doParallel", "parallel", "fs", "janitor", "stringr", "readxl", "writexl","fuzzyjoin", "chromote", "pdftools", "lubridate", "readr", "tidyr", "forcats", "purrr", "stringdist", "multidplyr", "odbc") |> unique() # "rvest", "polite", "XML", "tabulizer", "gt", "bigmemory"
 dev_pacs <- c() ## "aperium/rutil")
 bioc_pacs <- c("Biostrings", "pwalign") #,"msa")
 py_pacs <- c("camelot-py")
@@ -243,7 +243,7 @@ string_alignment_alike(c("plug 288","lin pw 72","Pot 1gal","SD 5K","lin 32lp","3
 ```
 
 
-```{r datasetup, echo=TRUE, error=TRUE, message=FALSE, warning=TRUE, eval=FALSE}
+```{r datasetup, echo=TRUE, error=TRUE, message=FALSE, warning=TRUE, eval=TRUE}
 # skipping for single-file reading
 
 if(is_null(getDefaultCluster())) {
@@ -325,7 +325,7 @@ mtag_orders <- foreach::foreach(i=order_files(mtag_files, baseName = mtag_baseNa
 
 ```
 
-```{r singlefileimport}
+```{r singlefileimport, eval=FALSE}
 
 e_orders <- tibble()
 
@@ -375,6 +375,19 @@ b_orders <- b_orders |>
   mutate(across(where(is.Date),as_date)) |>
   filter(`Ship Date` >= start_date,
          `Ship Date` <= end_date)
+
+
+```
+
+```{r import_odbc, eval=FALSE}
+
+odbcListDataSources()
+
+odbcListDrivers()
+
+con <- DBI::dbConnect(odbc::odbc(), dsn = "CounterPoint",
+                      driver = "SQL Server")
+
 
 
 ```
