@@ -555,7 +555,7 @@ joined %<>%
                            .default = "other"))
 
 
-write_xlsx_flex(joined, path = dir_path |> fs::path("2024", "ball express spring 2024", "spring2024_ball&express_v5.xlsx"))
+write_xlsx_flex(joined, path = dir_path |> fs::path("2024", "ball express 2024", "spring2024_ball&express_v5.xlsx"))
 ```
 
 ```{r averages, eval=FALSE}
