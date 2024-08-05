@@ -15,9 +15,9 @@ output:
 ```{r setup, echo=FALSE, error=TRUE, message=TRUE, warning=TRUE, include=FALSE}
 # this block loads required packages and some custom functions. 
 
-cran_pacs <- c("tidyverse","writexl","fs","stringr","parallel","multidplyr","foreach","doParallel","generics","withr","rlang","janitor","magrittr","purrr")
+cran_pacs <- c("tidyverse","writexl","fs","stringr","parallel","multidplyr","foreach","doParallel","generics","withr","rlang","janitor","magrittr","purrr","pwalign")
 dev_pacs <- c("r-dbi/odbc") 
-bioc_pacs <- c("Biostrings")
+bioc_pacs <- c()
 py_pacs <- c()
 
 # install installers
@@ -165,7 +165,7 @@ write_xlsx_flex <- function(x, path = tempfile(fileext = ".xlsx")) {
 ```{r utilityfuns}
 
 ## an alignment function for similar names
-pairwiseAlightmentMatch = function(x,y) {Biostrings::pairwiseAlignment(x,y,scoreOnly = TRUE) > 0}
+pairwiseAlightmentMatch = function(x,y) {pwalign::pairwiseAlignment(x,y,scoreOnly = TRUE) > 0}
 
 # name order function. Pulls out words and sorts them. Vectorized.
 string_alignment_prep <- function(x) {
@@ -205,7 +205,7 @@ name_match <- function(x,y) {
   doParallel::registerDoParallel(cores=n_cores-1)
   scores <- foreach::foreach(i=1:length(y_u), .combine = rbind, .export = "string_alignment_prep") %dopar% {
     # print("1a")
-    raw_score <- Biostrings::pairwiseAlignment(x_u |> string_alignment_prep(), y_u[i] |> string_alignment_prep(),scoreOnly = TRUE)
+    raw_score <- pwalign::pairwiseAlignment(x_u |> string_alignment_prep(), y_u[i] |> string_alignment_prep(),scoreOnly = TRUE)
     dplyr::if_else(raw_score>=0,raw_score,-stringr::str_length(paste0(x_u, y_u[i]))/raw_score)
   } |> unlist()
   # print("1b")
@@ -249,7 +249,7 @@ order_files <- function(paths, parseFun = identity, baseName = NA) {
     fs::path_file() |>
     fs::path_ext_remove()  
   start <- if(is.na(baseName)) {
-    alignment <- Biostrings::pairwiseAlignment(paths[2:length(paths)], paths[1])
+    alignment <- pwalign::pairwiseAlignment(paths[2:length(paths)], paths[1])
     alignment@subject@mismatch |> unlist() |> min() 
   } else {
     (baseName |> stringr::str_length()) + 1
@@ -261,15 +261,35 @@ order_files <- function(paths, parseFun = identity, baseName = NA) {
 
 # aligns two strings and returns their matched portion. not working
 string_alignment_alike <- Vectorize(function(x,y) {
-  strings <- c(x,y)
-  sri_order <- strings |> stringr::str_length() |> order(decreasing = TRUE)
-  alignment <- Biostrings::pairwiseAlignment(strings[sri_order[1]],strings[sri_order[2]], gapOpening = 10, gapExtension = 4)
-  base <- alignment@pattern |> as.character()
-  keepchars <- setdiff(1:str_length(base), alignment@pattern@mismatch@unlistData)
-  base |> stringr::str_sub(start = keepchars, end = keepchars) |> stringr::str_flatten() |> stringr::str_squish()
+  # strings <- c(x,y)
+  # # strings <- c("Pot 1gal","1g 3pp")
+  # sri_order <- strings |> stringr::str_length() |> order(decreasing = TRUE)
+  # alignment <- pwalign::pairwiseAlignment(strings[sri_order[1]],strings[sri_order[2]], gapOpening = 10, gapExtension = 4, type = "global")
+  # base <- alignment@pattern |> as.character()
+  # print(base)
+  # print(alignment@pattern@mismatch@unlistData)
+  # keepchars <- setdiff(1:str_length(base), alignment@pattern@mismatch@unlistData)
+  # print(keepchars)
+  # # base |> stringr::str_sub(start = keepchars, end = keepchars) |> stringr::str_flatten() |> stringr::str_squish()
+  # strings[sri_order[1]] |> str_sub(start = alignment@pattern@range@start, end = alignment@pattern@range@start + alignment@pattern@range@width -1)
+  
+  # alignment <- pwalign::pairwiseAlignment(x,y, gapOpening = 10*0, gapExtension = 4*2, type = "global")
+  # keepchars <- setdiff(1:str_length(x), alignment@pattern@mismatch@unlistData)
+  # # match <- x |> stringr::str_sub(start = keepchars, end = keepchars) |> stringr::str_flatten() |> stringr::str_squish()
+  # match <- stringr::str_sub(x, start = alignment@pattern@mismatch@unlistData, end = alignment@pattern@mismatch@unlistData) <- " "
+  # match |> stringr::str_flatten() |> stringr::str_squish()
+  
+  alignment <- pwalign::pairwiseAlignment(x,y, gapOpening = 10*2, gapExtension = 4*1, type = "global")
+  match <- alignment@pattern |> as.character() |> str_split_1("")
+  keepchars <- setdiff(1:length(match), alignment@pattern@mismatch@unlistData)
+  # match[keepchars] |> stringr::str_flatten() |> stringr::str_squish()
+  tmp <- character()
+  for(i in 1:length(match)) {
+    if (i %in% keepchars) tmp[i] <- match[i] else tmp[i] <- " "
+  }
+  print(tmp)
+  tmp |> stringr::str_flatten() |> str_replace_all("[:punct:]"," ") |> stringr::str_squish()
 })
-
-# test <- Vectorize(string_alignment_alike)
 
 # string_alignment_alike(c("plug 288","lin pw 72","Pot 1gal","SD 5K","lin 32lp","32-tray"),c("tray 288","tray 72","point of purchase","pack 5K","tray 32","32 tray"))
 
@@ -316,7 +336,7 @@ e_delivered <- foreach::foreach(i=order_files(e_delivered_files, baseName = e_de
 
 b_baseName <- "order_download_"
 b_files <- plants_dir |> fs::path("Ball export") |> fs::dir_ls() |> fs::path_filter(regex = paste0(b_baseName,".*\\.xlsx"))
-b_orders <- foreach::foreach(i=order_files(b_files, baseName = b_baseName, parseFun = ymd_hms), .combine = \(x,y) dplyr::rows_upsert(x,y,by = c("Order Number", "Order Line")), .packages = c("readxl")) %dopar% { 
+b_orders <- foreach::foreach(i=order_files(b_files, baseName = b_baseName, parseFun = ymd_hms), .combine = \(x,y) dplyr::rows_upsert(x,y,by = c("Order Number", "Order Line")), .packages = c("readxl","stringr")) %dopar% { 
   read_xlsx(b_files[i], guess_max = as.integer(.Machine$integer.max/100)) |>
     dplyr::mutate(vendor = "Ball",
                  "Order Number" = `Order Number` |> as.character(),
@@ -331,7 +351,7 @@ b_orders <- foreach::foreach(i=order_files(b_files, baseName = b_baseName, parse
                  "Tags" = `Tags` |> stringr::str_extract("[:digit:]*[:punct:]?[:digit:]*"),
                  "Freight" = `Freight` |> stringr::str_extract("[:digit:]*[:punct:]?[:digit:]*"),
                  "Total Unit Rate" = `Total Unit Rate` |> stringr::str_extract("[:digit:]*[:punct:]?[:digit:]*"),
-                 "Material Format" = string_alignment_alike()) |> ##TODO
+                 "Material Format" = string_alignment_alike(`Size`,`Material Group Description`)) |> ##TODO
     dplyr::select(!any_of(c("Not Used1","Not Used2"))) |>
     janitor::remove_empty("rows") |>
     dplyr::distinct() |>
