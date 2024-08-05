@@ -15,25 +15,31 @@ output:
 ```{r setup, echo=FALSE, error=TRUE, message=TRUE, warning=TRUE, include=FALSE}
 # this block loads required packages and some custom functions. 
 
-cran_pacs <- c("tidyverse","writexl","fs","stringr","parallel","multidplyr","foreach","doParallel","generics","withr","rlang","janitor","magrittr")
+cran_pacs <- c("tidyverse","writexl","fs","stringr","parallel","multidplyr","foreach","doParallel","generics","withr","rlang","janitor","magrittr","purrr")
 dev_pacs <- c("r-dbi/odbc") 
 bioc_pacs <- c("Biostrings")
 py_pacs <- c()
 
-# install pak
+# install installers
 if(!nzchar(find.package("pak", quiet = TRUE))) install.packages("pak")
+installer_pacs <- c(if (length(bioc_pacs) > 0) "BiocManager",
+                    if (length(py_pacs) > 0) "reticulate")
+if (length(installer_pacs) > 0) pak::pak(installer_pacs, upgrade = TRUE)
 
 # install and load R pacs
 r_pacs <- c(cran_pacs,dev_pacs,bioc_pacs)
 if (length(r_pacs) > 0) {
-  r_pacs <- c("librarian",r_pacs) |> unique()
+  r_pacs <- c("librarian",r_pacs) |> 
+    c(if (length(bioc_pacs) > 0) "BiocManager") |>
+    c(if (length(py_pacs) > 0) "reticulate") |> 
+    unique()
   pak::pak(r_pacs, upgrade = TRUE)
   librarian::shelf(r_pacs)
 }
 
 # install python packs
 if (length(py_pacs)>0) {
-  if (!nzchar(find.package("reticulate", quiet = TRUE))) install.packages("reticulate", quiet = TRUE)
+  # if (!nzchar(find.package("reticulate", quiet = TRUE))) install.packages("reticulate", quiet = TRUE)
   if (!reticulate::py_available(initialize = TRUE)) reticulate::install_python()
   if (reticulate::py_available(initialize = TRUE)) reticulate::py_install(py_pacs)
 }
