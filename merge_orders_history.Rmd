@@ -15,57 +15,80 @@ output:
 ```{r setup, echo=FALSE, error=TRUE, message=TRUE, warning=TRUE, include=FALSE}
 # this block loads required packages and some custom functions. 
 
-cran_pacs <- c("rlang", "pkgbuild","librarian", "pak", "rmarkdown", "tidyselect", "tidyverse", "magrittr", "stats", "measurements", "knitr", "foreach", "doParallel", "parallel", "fs", "janitor", "stringr", "readxl", "writexl","fuzzyjoin", "chromote", "pdftools", "lubridate", "readr", "tidyr", "forcats", "purrr", "stringdist", "multidplyr") |> unique() # "rvest", "polite", "XML", "tabulizer", "gt", "bigmemory", "odbc"
-dev_pacs <- c("r-dbi/odbc") ## "aperium/rutil")
-bioc_pacs <- c("Biostrings", "pwalign") #,"msa")
-py_pacs <- c("camelot-py")
+cran_pacs <- c("tidyverse","writexl","fs","stringr","parallel","multidplyr","foreach","doParallel","generics","withr","rlang","janitor","magrittr")
+dev_pacs <- c("r-dbi/odbc") 
+bioc_pacs <- c("Biostrings")
+py_pacs <- c()
 
-UPDATE <- FALSE
-QUIET <- FALSE
-ASK <- FALSE
+# install pak
+if(!nzchar(find.package("pak", quiet = TRUE))) install.packages("pak")
 
-# packlist <- c(cran_pacs, bioc_pacs, dev_pacs) 
-# for (x in packlist) {packlist |> sapply(\(x) try(unloadNamespace(x)))}
-# loadedNamespaces()
-
-## function to quietly find list of packages
-find_package_quiet <- function(pkgs, ...) unlist(find.package(pkgs, quiet = QUIET, ...))
-install_as_needed <- function(pacs, inst_fun = install.packages, check_fun = find_package_quiet, ...) {
-  inst_fun(setdiff(pacs,names(unlist(sapply(pacs,\(x) check_fun(x))))),...)
+# install and load R pacs
+r_pacs <- c(cran_pacs,dev_pacs,bioc_pacs)
+if (length(r_pacs) > 0) {
+  r_pacs <- c("librarian",r_pacs) |> unique()
+  pak::pak(r_pacs, upgrade = TRUE)
+  librarian::shelf(r_pacs)
 }
-
-# install cran packs
-if (length(cran_pacs) > 0) install_as_needed(cran_pacs,install.packages, quiet = QUIET)
-
-# install github dev packs
-if (length(dev_pacs)>0) {
-  if (!requireNamespace("pak", quietly = QUIET)[]) install.packages("pak", quiet = QUIET)
-  install_as_needed(dev_pacs,pak::pak, ask = ASK, upgrade = UPDATE)
-}
-
-# install bioc packs
-if (length(bioc_pacs)>0) {
-  if (!requireNamespace("BiocManager", quietly = QUIET)[]) install.packages("BiocManager", quiet = QUIET)
-  require(BiocManager)
-  BiocManager::install(version = "3.19", update = UPDATE, ask=ASK)
-  # install_as_needed(bioc_pacs,inst_fun = BiocManager::install, update = UPDATE, ask=ASK)
-  BiocManager::install(bioc_pacs, update = UPDATE, ask=ASK)
-}
-
-if (!requireNamespace("librarian", quietly = QUIET)[]) install.packages("librarian", quiet = QUIET)
-if (!requireNamespace("pak", quietly = QUIET)[]) install.packages("pak", quiet = QUIET)
-librarian::shelf(cran_pacs, bioc_pacs, dev_pacs, quiet = QUIET)
-installed_req_pkgs <- pak::pkg_status(c(cran_pacs, bioc_pacs, dev_pacs))$package
-# make sure everything is loaded
-installed_req_pkgs |> sapply(requireNamespace, character.only = TRUE, quietly = QUIET)
-loaded_pacs <- search() |> stringr::str_extract("(?<=:).*$") |> na.omit()
 
 # install python packs
 if (length(py_pacs)>0) {
-  if (!requireNamespace("reticulate", quietly = QUIET)[]) install.packages("reticulate", quiet = QUIET)
+  if (!nzchar(find.package("reticulate", quiet = TRUE))) install.packages("reticulate", quiet = TRUE)
   if (!reticulate::py_available(initialize = TRUE)) reticulate::install_python()
   if (reticulate::py_available(initialize = TRUE)) reticulate::py_install(py_pacs)
 }
+
+# cran_pacs <- c("rlang", "pkgbuild","librarian", "pak", "rmarkdown", "tidyselect", "tidyverse", "magrittr", "stats", "measurements", "knitr", "foreach", "doParallel", "parallel", "fs", "janitor", "stringr", "readxl", "writexl","fuzzyjoin", "chromote", "pdftools", "lubridate", "readr", "tidyr", "forcats", "purrr", "stringdist", "multidplyr") |> unique() # "rvest", "polite", "XML", "tabulizer", "gt", "bigmemory", "odbc"
+# dev_pacs <- c("r-dbi/odbc") ## "aperium/rutil")
+# bioc_pacs <- c("Biostrings", "pwalign") #,"msa")
+# py_pacs <- c("camelot-py")
+# 
+# UPDATE <- FALSE
+# QUIET <- FALSE
+# ASK <- FALSE
+# 
+# # packlist <- c(cran_pacs, bioc_pacs, dev_pacs) 
+# # for (x in packlist) {packlist |> sapply(\(x) try(unloadNamespace(x)))}
+# # loadedNamespaces()
+# 
+# ## function to quietly find list of packages
+# find_package_quiet <- function(pkgs, ...) unlist(find.package(pkgs, quiet = QUIET, ...))
+# install_as_needed <- function(pacs, inst_fun = install.packages, check_fun = find_package_quiet, ...) {
+#   inst_fun(setdiff(pacs,names(unlist(sapply(pacs,\(x) check_fun(x))))),...)
+# }
+# 
+# # install cran packs
+# if (length(cran_pacs) > 0) install_as_needed(cran_pacs,install.packages, quiet = QUIET)
+# 
+# # install github dev packs
+# if (length(dev_pacs)>0) {
+#   if (!requireNamespace("pak", quietly = QUIET)[]) install.packages("pak", quiet = QUIET)
+#   install_as_needed(dev_pacs,pak::pak, ask = ASK, upgrade = UPDATE)
+# }
+# 
+# # install bioc packs
+# if (length(bioc_pacs)>0) {
+#   if (!requireNamespace("BiocManager", quietly = QUIET)[]) install.packages("BiocManager", quiet = QUIET)
+#   require(BiocManager)
+#   BiocManager::install(version = "3.19", update = UPDATE, ask=ASK)
+#   # install_as_needed(bioc_pacs,inst_fun = BiocManager::install, update = UPDATE, ask=ASK)
+#   BiocManager::install(bioc_pacs, update = UPDATE, ask=ASK)
+# }
+# 
+# if (!requireNamespace("librarian", quietly = QUIET)[]) install.packages("librarian", quiet = QUIET)
+# if (!requireNamespace("pak", quietly = QUIET)[]) install.packages("pak", quiet = QUIET)
+# librarian::shelf(cran_pacs, bioc_pacs, dev_pacs, quiet = QUIET)
+# installed_req_pkgs <- pak::pkg_status(c(cran_pacs, bioc_pacs, dev_pacs))$package
+# # make sure everything is loaded
+# installed_req_pkgs |> sapply(requireNamespace, character.only = TRUE, quietly = QUIET)
+# loaded_pacs <- search() |> stringr::str_extract("(?<=:).*$") |> na.omit()
+# 
+# # install python packs
+# if (length(py_pacs)>0) {
+#   if (!requireNamespace("reticulate", quietly = QUIET)[]) install.packages("reticulate", quiet = QUIET)
+#   if (!reticulate::py_available(initialize = TRUE)) reticulate::install_python()
+#   if (reticulate::py_available(initialize = TRUE)) reticulate::py_install(py_pacs)
+# }
 
 ## register cores for foreach
 n_cores <- parallel::detectCores()
@@ -82,7 +105,7 @@ if(exists("dCluster")) rm(dCluster)
 dCluster <- new_cluster(n_cores-1)
 cluster_library_quiety <- purrr::quietly(cluster_library)
 # cluster_library_quiety(dCluster, loadedNamespaces())
-cluster_library_quiety(dCluster, installed_req_pkgs)
+cluster_library_quiety(dCluster, check_attached())
 
 ```
 
