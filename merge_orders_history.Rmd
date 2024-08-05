@@ -351,7 +351,8 @@ b_orders <- foreach::foreach(i=order_files(b_files, baseName = b_baseName, parse
                  "Tags" = `Tags` |> stringr::str_extract("[:digit:]*[:punct:]?[:digit:]*"),
                  "Freight" = `Freight` |> stringr::str_extract("[:digit:]*[:punct:]?[:digit:]*"),
                  "Total Unit Rate" = `Total Unit Rate` |> stringr::str_extract("[:digit:]*[:punct:]?[:digit:]*"),
-                 "Material Format" = string_alignment_alike(`Size`,`Material Group Description`)) |> ##TODO
+                 # "Material Format" = string_alignment_alike(`Size`,`Material Group Description`), ##TODO
+                 ) |> 
     dplyr::select(!any_of(c("Not Used1","Not Used2"))) |>
     janitor::remove_empty("rows") |>
     dplyr::distinct() |>
