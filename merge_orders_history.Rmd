@@ -15,7 +15,7 @@ output:
 ```{r setup, echo=FALSE, error=TRUE, message=TRUE, warning=TRUE, include=FALSE}
 # this block loads required packages and some custom functions. 
 
-cran_pacs <- c("tidyverse","writexl","fs","stringr","parallel","multidplyr","foreach","doParallel","generics","withr","rlang","janitor","magrittr","purrr","pwalign")
+cran_pacs <- c("tidyverse","writexl","fs","stringr","parallel","multidplyr","foreach","doParallel","generics","withr","rlang","janitor","magrittr","purrr","pwalign","readxl","fuzzyjoin","datawizard")
 dev_pacs <- c() #"r-dbi/odbc"
 bioc_pacs <- c()
 py_pacs <- c()
@@ -264,7 +264,7 @@ mtag_files <- tags_dir |> fs::path("MasterTag") |> fs::dir_ls() |> fs::path_filt
 # registerDoParallel(cores=n_cores-1)
 mtag_orders <- foreach::foreach(i=order_files(mtag_files, baseName = mtag_baseName, parseFun = mdy), .combine = \(x,y) dplyr::rows_upsert(x,y,by = c("MT Sales Order #", "MT ID")), .packages = c("foreach")) %dopar% { 
   foreach(j=c(2,1), .combine = dplyr::left_join) %dopar% {
-    read_xlsx_flex(path = mtag_files[i], sheet = j, guess_max = as.integer(.Machine$integer.max/100))
+    read_xlsx(path = mtag_files[i], sheet = j, guess_max = as.integer(.Machine$integer.max/100))
   } |> janitor::remove_empty("rows") |>
     dplyr::distinct()
   } |> janitor::remove_empty() |>
@@ -372,12 +372,12 @@ plants_joined <- full_join(e_combined, b_orders, by=alignment) %>%
 
 ```
 
-```{r filter, eval=FALSE}
+```{r filter, eval=TRUE}
 
 if(!exists("dCluster")) {
   dCluster <- new_cluster(n_cores-1)
   cluster_library_quiety <- purrr::quietly(cluster_library)
-  cluster_library_quiety(dCluster, installed_req_pkgs)
+  cluster_library_quiety(dCluster, librarian::check_attached())
 }
 
 plants_filtered <- plants_joined |>
@@ -396,7 +396,7 @@ tags_filtered <- mtag_orders |>
 
 ```
 
-```{r mtag_join, eval = FALSE}
+```{r mtag_join, eval = TRUE}
 
 
 plants_prep <- plants_filtered |>
@@ -430,8 +430,8 @@ aligned %<>%
 ```
 
 
-```{r export, eval=FALSE}
-joined %<>%
+```{r export, eval=TRUE}
+plants_joined %<>%
   mutate(size = case_when(str_detect(`Customer PO #`,"(^4.5)|(4.5[:space:]?((IN)|(in)|(\")))") ~ "4.5 in",
                            str_detect(`Customer PO #`,"^804") ~ "804",
                            str_detect(`Customer PO #`,"(^10)|(10[:space:]?((IN)|(in)|(\"))).*((HB)|(BSKT)|(BASKET))")  ~ "10 in hb",
@@ -451,7 +451,7 @@ joined %<>%
                            .default = "other"))
 
 
-write_xlsx_flex(joined, path = dir_path |> fs::path("2024", "ball express 2024", "spring2024_ball&express_v5.xlsx"))
+write_xlsx(plants_joined, path = plants_dir |> fs::path("2024", "ball express 2024", "fall2024_ball&express_v0.1.xlsx"))
 ```
 
 ```{r averages, eval=FALSE}
@@ -471,7 +471,7 @@ plugs_tbl <- tibble_row(size = "4 in", plugs = 1) |> # .25
   tibble::add_case(size = "10 in", plugs = 5)|>
   tibble::add_case(size = "804", plugs = 1)
 
-averages <- joined |>
+averages <- plants_joined |>
   dplyr::filter(`Ship Date` >= ymd("2024-01-01")) |>
   dplyr::mutate(category = if_else(str_detect(Supplier |> str_to_lower(), "four[:space:]?star"), "PW", "") |> str_c(size, sep = " ")) |>
   dplyr::summarise(dplyr::across(c("QTY Ordered","Total"),sum), .by = dplyr::any_of(c("category", "size"))) |>
