@@ -16,85 +16,28 @@ output:
 # this block loads required packages and some custom functions. 
 
 cran_pacs <- c("tidyverse","writexl","fs","stringr","parallel","multidplyr","foreach","doParallel","generics","withr","rlang","janitor","magrittr","purrr","pwalign")
-dev_pacs <- c("r-dbi/odbc") 
+dev_pacs <- c() #"r-dbi/odbc"
 bioc_pacs <- c()
 py_pacs <- c()
 
 # install installers
-if(!nzchar(find.package("pak", quiet = TRUE))) install.packages("pak")
-installer_pacs <- c(if (length(bioc_pacs) > 0) "BiocManager",
-                    if (length(py_pacs) > 0) "reticulate")
+if(length(find.package("pak", quiet = TRUE))==0) install.packages("pak")
+if(length(find.package("librarian", quiet = TRUE))==0) pak::pak("librarian")
+installer_pacs <- Filter(librarian::check_installed, c(if (length(bioc_pacs) > 0) "BiocManager", if (length(py_pacs) > 0) "reticulate"))
 if (length(installer_pacs) > 0) pak::pak(installer_pacs, upgrade = TRUE)
 
 # install and load R pacs
-r_pacs <- c(cran_pacs,dev_pacs,bioc_pacs)
+r_pacs <- c(cran_pacs,dev_pacs,bioc_pacs) |> unique()
 if (length(r_pacs) > 0) {
-  r_pacs <- c("librarian",r_pacs) |> 
-    c(if (length(bioc_pacs) > 0) "BiocManager") |>
-    c(if (length(py_pacs) > 0) "reticulate") |> 
-    unique()
   pak::pak(r_pacs, upgrade = TRUE)
   librarian::shelf(r_pacs)
 }
 
 # install python packs
 if (length(py_pacs)>0) {
-  # if (!nzchar(find.package("reticulate", quiet = TRUE))) install.packages("reticulate", quiet = TRUE)
   if (!reticulate::py_available(initialize = TRUE)) reticulate::install_python()
   if (reticulate::py_available(initialize = TRUE)) reticulate::py_install(py_pacs)
 }
-
-# cran_pacs <- c("rlang", "pkgbuild","librarian", "pak", "rmarkdown", "tidyselect", "tidyverse", "magrittr", "stats", "measurements", "knitr", "foreach", "doParallel", "parallel", "fs", "janitor", "stringr", "readxl", "writexl","fuzzyjoin", "chromote", "pdftools", "lubridate", "readr", "tidyr", "forcats", "purrr", "stringdist", "multidplyr") |> unique() # "rvest", "polite", "XML", "tabulizer", "gt", "bigmemory", "odbc"
-# dev_pacs <- c("r-dbi/odbc") ## "aperium/rutil")
-# bioc_pacs <- c("Biostrings", "pwalign") #,"msa")
-# py_pacs <- c("camelot-py")
-# 
-# UPDATE <- FALSE
-# QUIET <- FALSE
-# ASK <- FALSE
-# 
-# # packlist <- c(cran_pacs, bioc_pacs, dev_pacs) 
-# # for (x in packlist) {packlist |> sapply(\(x) try(unloadNamespace(x)))}
-# # loadedNamespaces()
-# 
-# ## function to quietly find list of packages
-# find_package_quiet <- function(pkgs, ...) unlist(find.package(pkgs, quiet = QUIET, ...))
-# install_as_needed <- function(pacs, inst_fun = install.packages, check_fun = find_package_quiet, ...) {
-#   inst_fun(setdiff(pacs,names(unlist(sapply(pacs,\(x) check_fun(x))))),...)
-# }
-# 
-# # install cran packs
-# if (length(cran_pacs) > 0) install_as_needed(cran_pacs,install.packages, quiet = QUIET)
-# 
-# # install github dev packs
-# if (length(dev_pacs)>0) {
-#   if (!requireNamespace("pak", quietly = QUIET)[]) install.packages("pak", quiet = QUIET)
-#   install_as_needed(dev_pacs,pak::pak, ask = ASK, upgrade = UPDATE)
-# }
-# 
-# # install bioc packs
-# if (length(bioc_pacs)>0) {
-#   if (!requireNamespace("BiocManager", quietly = QUIET)[]) install.packages("BiocManager", quiet = QUIET)
-#   require(BiocManager)
-#   BiocManager::install(version = "3.19", update = UPDATE, ask=ASK)
-#   # install_as_needed(bioc_pacs,inst_fun = BiocManager::install, update = UPDATE, ask=ASK)
-#   BiocManager::install(bioc_pacs, update = UPDATE, ask=ASK)
-# }
-# 
-# if (!requireNamespace("librarian", quietly = QUIET)[]) install.packages("librarian", quiet = QUIET)
-# if (!requireNamespace("pak", quietly = QUIET)[]) install.packages("pak", quiet = QUIET)
-# librarian::shelf(cran_pacs, bioc_pacs, dev_pacs, quiet = QUIET)
-# installed_req_pkgs <- pak::pkg_status(c(cran_pacs, bioc_pacs, dev_pacs))$package
-# # make sure everything is loaded
-# installed_req_pkgs |> sapply(requireNamespace, character.only = TRUE, quietly = QUIET)
-# loaded_pacs <- search() |> stringr::str_extract("(?<=:).*$") |> na.omit()
-# 
-# # install python packs
-# if (length(py_pacs)>0) {
-#   if (!requireNamespace("reticulate", quietly = QUIET)[]) install.packages("reticulate", quiet = QUIET)
-#   if (!reticulate::py_available(initialize = TRUE)) reticulate::install_python()
-#   if (reticulate::py_available(initialize = TRUE)) reticulate::py_install(py_pacs)
-# }
 
 ## register cores for foreach
 n_cores <- parallel::detectCores()
@@ -111,54 +54,7 @@ if(exists("dCluster")) rm(dCluster)
 dCluster <- new_cluster(n_cores-1)
 cluster_library_quiety <- purrr::quietly(cluster_library)
 # cluster_library_quiety(dCluster, loadedNamespaces())
-cluster_library_quiety(dCluster, check_attached())
-
-```
-
-```{r xlxs_function, echo=FALSE, error=TRUE, message=TRUE, warning=TRUE, include=FALSE}
-# These are some sloppy workarounds for reading and writing data from and to excel files. Some of the readxl and writexl are preferred but they are not universally supported. If they are not installed, these functions use on of the other two packages for xlsx-file handling in the order of preference (openxlsx is preferred over xlsx). For simplicity and robustness many features of the packages are not accessible except where they can be translated 1-to-1 across all three. Ideally, The resulting data should be approximately identical in structure, datatypes, and column names regardless of the function it is using to read or write data.
-
-read_xlsx_flex <- function(path, sheet = NULL, range = NULL, col_names = TRUE, ...) {
-  if(nzchar(find.package("readxl"))) use_which <- "readxl"
-  else if (nzchar(find.package("openxlsx"))) use_which <- "openxlsx"
-  else if (nzchar(find.package("xlsx"))) use_which <- "xlsx"
-  else return("please install one of: readxl, openxlsx, xlsx")
-  #
-  sheet_index <- switch (typeof(sheet),
-    "NULL" = 1,
-    "double" = sheet,
-    "integer" = sheet,
-    "numeric" = sheet,
-    "character" = NULL
-  )
-  sheet_name <- switch (typeof(sheet),
-    "NULL" = NULL,
-    "double" = NULL,
-    "integer" = NULL,
-    "numeric" = NULL,
-    "character" = sheet
-  )
-  # use_which <- "readxl"
-  switch (use_which,
-    "readxl" = readxl::read_xlsx(path = path, sheet = sheet, range = range, col_names = col_names, ...),
-    "openxlsx" = openxlsx::read.xlsx(xlsxFile = path, sheet = ifelse(!is_null(sheet_index), sheet_index, 1) , colNames = col_names, check.names = FALSE, sep.names = " ", ...),
-    "xlsx" = xlsx::read.xlsx(file = path, sheetIndex = sheet_index, sheetName = sheet_name, header = col_names, as.data.frame=TRUE, check.names = FALSE, ...)
-  )
-}
-
-
-write_xlsx_flex <- function(x, path = tempfile(fileext = ".xlsx")) {
-  if(nzchar(find.package("writexl"))) use_which <- "writexl"
-  else if (nzchar(find.package("openxlsx"))) use_which <- "openxlsx"
-  else if (nzchar(find.package("xlsx"))) use_which <- "xlsx"
-  else return("please install one of: writexl, openxlsx, xlsx")
-  # use_which <- "xlsx"
-  switch (use_which,
-    "writexl" = writexl::write_xlsx(x = x, path = path, col_names = TRUE),
-    "openxlsx" = openxlsx::write.xlsx(x = x, file = path, asTable = TRUE, overwrite = TRUE),
-    "xlsx" = xlsx::write.xlsx2(x = as.data.frame(x), file = path, row.names = FALSE, showNA = FALSE) # puts the rownames in column A. removing them throws bugs.
-  )
-}
+cluster_library_quiety(dCluster, librarian::check_attached())
 
 ```
 
