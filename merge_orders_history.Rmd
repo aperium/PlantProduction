@@ -231,11 +231,12 @@ e_delivered <- foreach::foreach(i=order_files(e_delivered_files, baseName = e_de
   } |> janitor::remove_empty()
 
 # join express delivered and ordered by adding rows from e_orders that do not have a key match in e_delivered
+# and pull out sizes
 e_combined <- e_orders |>
   filter(`Ship Date` > max(e_delivered$`Ship Date`)) |>
   right_join(e_delivered) |>
   mutate(vendor = "Express",
-         size = Description |> str_squish() |> str_extract("(?<=-)[:alnum:]*$"))
+         Size = Description |> str_squish() |> str_extract("(?<=-)[:alnum:]*$"))
 
 b_baseName <- "order_download_"
 b_files <- plants_dir |> fs::path("Ball export") |> fs::dir_ls() |> fs::path_filter(regex = paste0(b_baseName,".*\\.xlsx"))
@@ -349,6 +350,8 @@ con <- DBI::dbConnect(drv = odbc::odbc(), dsn = odbc::odbcListDataSources() |> t
 ```{r e_b_join}
 
 # need a function for extracting and alighning the plug tray sizes (etc)
+e_combined$Size |> unique()
+b_orders$Size |> unique()
 
 
 alignment <- c("vendor" = "vendor", 
@@ -361,7 +364,8 @@ alignment <- c("vendor" = "vendor",
                "Description" = "Description", 
                "Supplier" = "Supplier", 
                "QTY Ordered" = "Quantity", 
-               "Total" = "Total Extended Value")
+               "Total" = "Total Extended Value",
+               "Size" = "Size")
 
 b_keep_cols <- alignment |> unname() |> c("Reference Number") |> unique()
 
@@ -373,6 +377,8 @@ plants_joined <- full_join(e_combined, b_orders, by=alignment) |>
 ```
 
 ```{r filter, eval=TRUE}
+
+## TODO
 
 if(!exists("dCluster")) {
   dCluster <- new_cluster(n_cores-1)
