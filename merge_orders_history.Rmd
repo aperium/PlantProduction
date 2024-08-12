@@ -193,8 +193,6 @@ string_alignment_alike <- Vectorize(function(x,y) {
 
 
 ```{r datasetup, echo=TRUE, error=TRUE, message=FALSE, warning=TRUE, eval=TRUE}
-# skipping for single-file reading
-
 if(is_null(getDefaultCluster())) {
   makeCluster(n_cores-1) |> setDefaultCluster()
   registerDoParallel(getDefaultCluster())
@@ -262,7 +260,9 @@ b_orders <- foreach::foreach(i=order_files(b_files, baseName = b_baseName, parse
     dplyr::distinct() |>
     dplyr::filter(!is.na(`Order Number`))
   } |> janitor::remove_empty() |>
-  unite(col = "Description", any_of(c("Class","Variety")), sep = " ", remove = FALSE)
+  # unite(col = "Description", any_of(c("Class","Variety")), sep = " ", remove = FALSE)
+  rowwise() |>
+  mutate("Description" = str_c(`Class`,`Variety`, sep = " "))
 
 mtag_baseName <- "GREENSTREET_GROWERS_INC_Order Export_"
 mtag_files <- tags_dir |> fs::path("MasterTag") |> fs::dir_ls() |> fs::path_filter(regex = paste0(mtag_baseName,".*\\.xlsx"))
@@ -376,6 +376,873 @@ plants_joined <- full_join(e_combined, b_orders, by=alignment) |>
 
 ```
 
+```{r plant_names_classifications}
+# List of herbs with genera and common names
+herbs <- list(
+  Chamaemelum = c("Chamaemelum","Chamomile","camomile","German chamomile"),
+  Matricaria = c("Matricaria","Chamomile","camomile","Roman chamomile"),
+  Allium = c("Allium", "Chive", "Chives", "Garlic", "Leek", "Onion", "Scallion"),
+  Ocimum = c("Ocimum", "Basil", "Holy Basil", "Tulsi"),
+  Mentha = c("Mentha", "Mint", "Peppermint", "Spearmint"),
+  Petroselinum = c("Petroselinum", "Parsley"),
+  Coriandrum = c("Coriandrum", "Cilantro", "Coriander"),
+  Salvia = c("Salvia", "Sage", "Salvia-Sage"),
+  Thymus = c("Thymus", "Thyme"),
+  Rosmarinus = c("Rosmarinus", "Rosemary"),
+  Origanum = c("Origanum", "Oregano", "Marjoram"),
+  Lavandula = c("Lavandula", "Lavender"),
+  Foeniculum = c("Foeniculum", "Fennel"),
+  Melissa = c("Melissa", "Lemon balm"),
+  Anethum = c("Anethum", "Dill"),
+  Cymbopogon = c("Cymbopogon", "Lemongrass"),
+  Satureja = c("Satureja", "Savory"),
+  Artemisia = c("Artemisia", "Tarragon", "Mugwort"),
+  Piper = c("Piper", "Black Pepper", "Long Pepper"),
+  Zingiber = c("Zingiber", "Ginger"),
+  Curcuma = c("Curcuma", "Turmeric"),
+  Cinnamomum = c("Cinnamomum", "Cinnamon"),
+  Syzygium = c("Syzygium", "Clove"),
+  Myristica = c("Myristica", "Nutmeg"),
+  Pimenta = c("Pimenta", "Allspice"),
+  Capsicum = c("Capsicum", "Chili Pepper", "Paprika", "Cayenne Pepper"),
+  Schinus = c("Schinus", "Pink Peppercorn"),
+  Elettaria = c("Elettaria", "Cardamom"),
+  Apium = c("Apium", "Celery", "Lovage"),
+  Nigella = c("Nigella", "Black Cumin", "Nigella"),
+  Perilla = c("Perilla", "Shiso"),
+  Sesamum = c("Sesamum", "Sesame"),
+  Spondias = c("Spondias", "Jocote", "Hog Plum"),
+  Trachyspermum = c("Trachyspermum", "Ajwain"),
+  Murraya = c("Murraya", "Curry Leaf"),
+  Ocotea = c("Ocotea", "Brazilian Nutmeg"),
+  Valeriana = c("Valeriana","Valerian"),
+  Hyssopus = c("Hyssopus", "Hyssop"),
+  Cuminum = c("Cuminum","Cumin"),
+  Carum = c("Carum","Caraway"),
+  Bergera = c("Bergera","curry leaf", "curry bush", "curry tree","Murraya"),
+  Borago = c("Borago","Borage"),
+  Hordeum = c("Hordeum vulgare", "barley", "tabby grass", "cat grass"),
+  Stevia = c("Stevia","candyleaf", "sweetleaf", "sugarleaf"),
+  Eucalyptus = c("Eucalyptus polyanthemos", "red box", "Eucalyptus ciner", "silver dollar", "Baby Blue", "Eucalyptus"),
+  Eryngium = c("Eryngium","culantro","cimarrón", "recao", "chardon béni", "Mexican coriander", "samat", "bandhaniya","Burmese coriander", "ngò gai"),
+  Helichrysum = c("Helichrysum microphyllum", "Dwarf Curry", "curry dwarf"),
+  Anthriscus = c("Anthriscus cerefolium", "Chervil", "French parsley"),
+  Ruta = c("Ruta", "Rue")
+) |> enframe() |>
+  unnest(value) |>
+  dplyr::rename("genus" = name, "common name" = value) |>
+  mutate(dept = "edibles",subdept = "herb", .before = 1)
+
+# List of vegetables with genera and common names
+vegetables <- list(
+  Brassica = c("Brassica", "Cabbage", "Broccoli", "Cauliflower", "Kale", "Mustard", "Kohlrabi", "Bok Choy", "Pak Choi", "Brussels", "Collards", "Brassica rapa", "turnip"),
+  Lactuca = c("Lactuca", "Lettuce", "SimplySalad", "Salad"),
+  Spinacia = c("Spinacia", "Spinach"),
+  Solanum = c("Solanum", "Tomato", "Eggplant", "Potato", "Pepper", "Tomatillo"),
+  Cucumis = c("Cucumis", "Cucumber", "Melon", "West Indian Gherkin"),
+  Pisum = c("Pisum", "Pea"),
+  Phaseolus = c("Phaseolus", "Bean", "Lima Bean", "Mung Bean", "Black Bean"),
+  Daucus = c("Daucus", "Carrot"),
+  Capsicum = c("Capsicum", "Pepper", "Chili", "Poblano", "Jalapeno"),
+  Cucurbita = c("Cucurbita", "Pumpkin", "Squash", "Zucchini", "Bitter Melon"),
+  Apium = c("Apium", "Celery", "Celeriac"),
+  Beta = c("Beta", "Beet", "Chard"),
+  Rheum = c("Rheum", "Rhubarb"),
+  Allium = c("Allium", "Onion", "Garlic", "Shallot", "Ramp"),
+  Asparagus = c("Asparagus", "Asparagus"),
+  Ipomoea = c("Ipomoea", "Sweet Potato"),
+  Raphanus = c("Raphanus", "Radish", "Daikon"),
+  Cichorium = c("Cichorium", "Chicory", "Endive", "Radicchio"),
+  Amaranthus = c("Amaranthus", "Amaranth"),
+  Dioscorea = c("Dioscorea", "Yam"),
+  Colocasia = c("Colocasia", "Taro"),
+  Artocarpus = c("Artocarpus", "Breadfruit", "Jackfruit"),
+  Abelmoschus = c("Abelmoschus", "Okra"),
+  Solanum = c("Solanum", "Naranjilla"),
+  Amorphophallus = c("Amorphophallus", "Konjac"),
+  Vigna = c("Vigna", "Cowpea", "Adzuki Bean"),
+  Cyphomandra = c("Cyphomandra", "Tamarillo"),
+  Lagenaria = c("Lagenaria", "Calabash"),
+  Chayote = c("Chayote", "Chayote Squash"),
+  Ullucus = c("Ullucus", "Ulluco"),
+  Basella = c("Basella", "Malabar Spinach"),
+  Eruca = c("Eruca", "Arugula"),
+  Moringa = c("Moringa", "Drumstick Tree"),
+  Psophocarpus = c("Psophocarpus", "Winged Bean"),
+  Pachyrhizus = c("Pachyrhizus", "Jicama"),
+  Manihot = c("Manihot", "Cassava"),
+  Helianthus = c("Helianthus", "Jerusalem Artichoke"),
+  Persea = c("Persea", "Avocado"),
+  Portulaca = c("Portulaca oleracea","purslane"),
+  Nasturtium = c("Nasturtium", "Watercress","yellowcress"),
+  Cynara = c("Cynara", "Artichoke"),
+  Physalis = c("Physalis", "groundcherry")
+) |> enframe() |>
+  unnest(value) |>
+  dplyr::rename("genus" = name, "common name" = value) |>
+  mutate(dept = "edibles",subdept = "veg", .before = 1)
+
+fruits <- list(
+  Malus = c("Malus", "Apple"),
+  Pyrus = c("Pyrus", "Pear"),
+  Prunus = c("Prunus", "Cherry", "Plum", "Peach", "Nectarine", "Apricot", "Almond"),
+  Rubus = c("Rubus", "Raspberry", "Blackberry", "Boysenberry"),
+  Fragaria = c("Fragaria", "Strawberry"),
+  Vitis = c("Vitis", "Grape"),
+  Citrus = c("Citrus", "Orange", "Lemon", "Lime", "Grapefruit", "Mandarin", "Tangerine"),
+  Musa = c("Musa", "Banana", "Plantain"),
+  Ficus = c("Ficus", "Fig"),
+  Vaccinium = c("Vaccinium", "Blueberry", "Cranberry", "Lingonberry"),
+  Diospyros = c("Diospyros", "Persimmon"),
+  Mangifera = c("Mangifera", "Mango"),
+  Carica = c("Carica", "Papaya"),
+  Annona = c("Annona", "Cherimoya", "Soursop", "Custard Apple"),
+  Passiflora = c("Passiflora", "Passionfruit"),
+  Actinidia = c("Actinidia", "Kiwi", "Hardy Kiwi"),
+  Carya = c("Carya", "Pecan"),
+  Juglans = c("Juglans", "Walnut"),
+  Pouteria = c("Pouteria", "Sapodilla"),
+  Durio = c("Durio", "Durian"),
+  Syzygium = c("Syzygium", "Rose Apple", "Malay Apple", "Java Apple"),
+  Litchi = c("Litchi", "Lychee"),
+  Eriobotrya = c("Eriobotrya", "Loquat"),
+  Punica = c("Punica", "Pomegranate"),
+  Tamarindus = c("Tamarindus", "Tamarind"),
+  Morus = c("Morus", "Mulberry"),
+  Garcinia = c("Garcinia", "Mangosteen"),
+  Cydonia = c("Cydonia", "Quince"),
+  Ribes = c("Ribes", "Gooseberry", "Currant"),
+  Ziziphus = c("Ziziphus", "Jujube"),
+  Feijoa = c("Feijoa", "Pineapple Guava"),
+  Spondias = c("Spondias", "Jocote", "Hog Plum"),
+  Elaeagnus = c("Elaeagnus", "Goumi", "Autumn Olive"),
+  Salacca = c("Salacca", "Salak", "Snake Fruit"),
+  Artocarpus = c("Artocarpus", "Jackfruit", "Breadfruit"),
+  Syzygium = c("Syzygium", "Water Apple", "Java Apple"),
+  Hylocereus = c("Hylocereus", "Dragon Fruit"),
+  Diospyros = c("Diospyros", "Black Sapote", "Chocolate Pudding Fruit"),
+  Persea = c("Persea", "Avocado"),
+  Musa = c("Musa", "Banana", "Plantain"),
+  Litchi = c("Litchi", "Lychee"),
+  Nephelium = c("Nephelium", "Rambutan"),
+  Pouteria = c("Pouteria", "Mamey Sapote"),
+  Rollinia = c("Rollinia", "Biriba"),
+  Berberis = c("Berberis", "Barberry"),
+  Mimusops = c("Mimusops", "Mimusops", "Sapodilla"),
+  Tamarillo = c("Cyphomandra", "Tamarillo"),
+  Maracuja = c("Passiflora", "Passionfruit"),
+  Citrullus = c("Citrullus", "watermelon")
+) |> enframe() |>
+  unnest(value) |>
+  dplyr::rename("genus" = name, "common name" = value) |>
+  mutate(dept = "edibles",subdept = "fruit", .before = 1)
+
+
+## NOW for non-edibles
+annuals <- list(
+  Tagetes = c("Tagetes", "Marigold"),
+  Impatiens = c("Impatiens", "Impatiens", "Busy Lizzie", "ImpaEX", "SunpatnsCmp"),
+  Petunia = c("Petunia", "Petunia"),
+  Pelargonium = c("Pelargonium", "Geranium"),
+  Viola = c("Viola", "Pansy", "Viola"),
+  Calendula = c("Calendula", "Calendula", "Pot Marigold"),
+  Zinnia = c("Zinnia", "Zinnia"),
+  Begonia = c("Begonia", "Begonia"),
+  Lobelia = c("Lobelia", "Lobelia"),
+  Salvia = c("Salvia"),
+  Nicotiana = c("Nicotiana", "Flowering Tobacco"),
+  Cosmos = c("Cosmos", "Cosmos"),
+  Ageratum = c("Ageratum", "Floss Flower"),
+  Antirrhinum = c("Antirrhinum", "Snapdragon"),
+  Alyssum = c("Alyssum", "Sweet Alyssum"),
+  Catharanthus = c("Catharanthus", "Vinca", "Madagascar Periwinkle"),
+  Gazania = c("Gazania", "Gazania", "Treasure Flower"),
+  Nemesia = c("Nemesia", "Nemesia"),
+  Portulaca = c("Portulaca", "Portulaca", "Moss Rose"),
+  Celosia = c("Celosia", "Celosia", "Cockscomb"),
+  Dianthus = c("Dianthus", "Dianthus", "Sweet William"),
+  Helichrysum = c("Helichrysum", "Strawflower", "Everlasting"),
+  Plectranthus = c("Plectranthus", "Coleus"),
+  Rudbeckia = c("Rudbeckia", "Black-Eyed Susan"),
+  Tropaeolum = c("Tropaeolum", "Nasturtium"),
+  Verbena = c("Verbena", "Verbena"),
+  Vinca = c("Vinca", "Vinca", "Periwinkle"),
+  Lantana = c("Lantana", "Lantana"),
+  Phlox = c("Phlox", "Phlox"),
+  Tithonia = c("Tithonia", "Mexican Sunflower"),
+  Eschscholzia = c("Eschscholzia", "California Poppy"),
+  Calibrachoa = c("Calibrachoa", "Million Bells"),
+  Gomphrena = c("Gomphrena", "Globe Amaranth"),
+  Clarkia = c("Clarkia", "Clarkia", "Farewell-to-Spring"),
+  Brachyscome = c("Brachyscome", "Swan River Daisy"),
+  Torenia = c("Torenia", "Wishbone Flower"),
+  Sanvitalia = c("Sanvitalia", "Creeping Zinnia"),
+  Osteospermum = c("Osteospermum", "African Daisy"),
+  Scaevola = c("Scaevola", "Fan Flower"),
+  Nemophila = c("Nemophila", "Baby Blue Eyes"),
+  Linaria = c("Linaria", "Toadflax"),
+  Gilia = c("Gilia", "Gilia", "Bird's Eye"),
+  Clarkia = c("Clarkia", "Godetia"),
+  Pennisetum = c("Pennisetum","Ornamental Millet","Millet"),
+  Jacobaea = c("Jacobaea", "Dusty Miller", "Senecio cineraria"),
+  Centaurea = c("Centaurea", "Centaurea cineraria"),
+  Portulaca = c("Portulaca grandiflora","portulaca","rose moss", "eleven o'clock", "moss rose","flor de las once", "bella las once"),
+  Melampodium = c("Melampodium"),
+  Petchoa = c("Petchoa", "SupCal", "Suprtn"),
+  Dichondra = c("Dichondra", "ponysfoot"),
+  Evolvulus = c("Evolvulus"),
+  Bacopa = c("Bacopa", "Sutera"),
+  Angelonia = c("Angelonia"),
+  Cuphea = c("Cuphea"),
+  Duranta = c("Duranta"),
+  Zizia = c("Zizia"),
+  Heliopsis = c("Heliopsis"),
+  Pentas = c("Pentas"),
+  Cleome = c("Cleome", "spider flower"),
+  Alternanthera = c("Alternanthera"),
+  Bidens = c("Bidens", "tickseed"),
+  Mix = c("MixMaster","TrixiLiner", "Combo", "Mult-sp"),
+  Heliotropium = c("Heliotropium", "Heliotrope"),
+  Fuchsia = c("Fuchsia"),
+  Erysimum = c("Erysimum", "wallflower"),
+  Leucanthemum = c("Leucanthemum", "Shasta Daisy"),
+  Oxalis = c("Oxalis"),
+  Browallia = c("Browallia"),
+  Mecardonia = c("Mecardonia", "axilflower", "Metatera"),
+  Strobilanthes = c("Strobilanthes", "persian shield"),
+  Iresine = c("Iresine"),
+  Ruelia = c("Ruelia")
+) |> enframe() |>
+  unnest(value) |>
+  dplyr::rename("genus" = name, "common name" = value) |>
+  mutate(dept = "annuals", subdept = "annuals", .before = 1)
+
+perennials <- list(
+  Hemerocallis = c("Hemerocallis", "Daylily"),
+  Echinacea = c("Echinacea", "Coneflower"),
+  Rudbeckia = c("Rudbeckia", "Black-Eyed Susan"),
+  Hosta = c("Hosta", "Hosta", "Plantain Lily"),
+  Lavandula = c("Lavandula", "Lavender"),
+  Phlox = c("Phlox", "Phlox"),
+  Sedum = c("Sedum", "Stonecrop"),
+  Achillea = c("Achillea", "Yarrow"),
+  Astilbe = c("Astilbe", "Astilbe", "False Goat's Beard"),
+  Geranium = c("Geranium", "Cranesbill"),
+  Heuchera = c("Heuchera", "Coral Bells"),
+  Alchemilla = c("Alchemilla", "Lady's Mantle"),
+  Nepeta = c("Nepeta", "Catmint"),
+  Coreopsis = c("Coreopsis", "Tickseed"),
+  Dianthus = c("Dianthus", "Pinks", "Carnation"),
+  Delphinium = c("Delphinium", "Delphinium", "Larkspur"),
+  Iris = c("Iris", "Iris"),
+  Monarda = c("Monarda", "Bee Balm"),
+  Peony = c("Peony", "Peony"),
+  Digitalis = c("Digitalis", "Foxglove"),
+  Aquilegia = c("Aquilegia", "Columbine"),
+  Gaillardia = c("Gaillardia", "Blanket Flower"),
+  Liatris = c("Liatris", "Blazing Star", "Gayfeather"),
+  Veronica = c("Veronica", "Speedwell"),
+  Penstemon = c("Penstemon", "Beardtongue"),
+  Baptisia = c("Baptisia", "False Indigo"),
+  Lupinus = c("Lupinus", "Lupine"),
+  Artemisia = c("Artemisia", "Wormwood"),
+  Campanula = c("Campanula", "Bellflower"),
+  Aster = c("Aster", "Aster"),
+  Helleborus = c("Helleborus", "Hellebore", "Lenten Rose"),
+  Kniphofia = c("Kniphofia", "Red Hot Poker"),
+  Papaver = c("Papaver", "Poppy"),
+  Stachys = c("Stachys", "Lamb's Ear"),
+  Dicentra = c("Dicentra", "Bleeding Heart"),
+  Platycodon = c("Platycodon", "Balloon Flower"),
+  Bergenia = c("Bergenia", "Pigsqueak"),
+  Pulmonaria = c("Pulmonaria", "Lungwort"),
+  Gaura = c("Gaura", "Beeblossom"),
+  Brunnera = c("Brunnera", "Siberian Bugloss"),
+  Ajuga = c("Ajuga", "Bugleweed"),
+  Eryngium = c("Eryngium", "Sea Holly"),
+  Armeria = c("Armeria", "Sea Thrift"),
+  Ligularia = c("Ligularia", "Leopard Plant"),
+  Tiarella = c("Tiarella", "Foamflower"),
+  Chrysanthemum = c("Chrysanthemum", "Garden Mum"),
+  Agapanthus = c("Agapanthus", "Lily of the Nile"),
+  Aruncus = c("Aruncus", "Goat's Beard"),
+  Verbascum = c("Verbascum", "Mullein"),
+  Lychnis = c("Lychnis", "Campion"),
+  Perovskia = c("Perovskia", "Russian Sage"),
+  Oenothera = c("Oenothera", "Evening Primrose"),
+  Phlomis = c("Phlomis", "Jerusalem Sage"),
+  Dicliptera = c("Dicliptera", "Hummingbird Plant"),
+  Anemone = c("Anemone", "Windflower"),
+  Echinops = c("Echinops", "Globe Thistle"),
+  Rudbeckia = c("Rudbeckia", "Black-Eyed Susan"),
+  Kniphofia = c("Kniphofia", "Red Hot Poker"),
+  Thalictrum = c("Thalictrum", "Meadow Rue"),
+  Antennaria = c("Antennaria", "pussytoes"),
+  Sagina = c("Sagina"),
+  Buddleja = c("Buddleja","Buddleia","butterfly bush"),
+  Asclepias = c("Asclepias", " butterfly weed", "milkweed"),
+  Agastache = c("Agastache", "giant hyssop", "hummingbird mint"),
+  Chelone = c("Chelone", "turtlehead"),
+  Helenium = c("Helenium", "sneezeweed"),
+  Eucomis = c("Eucomis", "pineapple flower", "pineapple lily"),
+  Stokesia = c("Stokesia"),
+  Amsonia = c("Amsonia", "bluestar", "blue star"),
+  Vernonia = c("Vernonia", "ironweed", "hawkweed"),
+  Argyranthemum = c("Argyranthemum"),
+  Calylophus = c("Calylophus", "sundrop"),
+  Felicia = c("Felicia"),
+  Euryops = c("Euryops", "busy daisy"),
+  Ballota = c("Ballota", "Horehound"),
+  Chrysogonum = c("Chrysogonum"),
+  Polemonium = c("Polemonium"),
+  Epimedium = c("Epimedium"),
+  Lamium = c("Lamium", "lamiastrum", "Dead-nettle"),
+  Delosperma = c("Delosperma", "ice plant"),
+  Meehania = c("Meehania"),
+  Physostegia = c("Physostegia", "obedient plant", "lionsheart", "false dragonhead"),
+  Solidago = c("Solidago", "Goldenrod", "golden rod"),
+  Geum = c("Geum", "avens"),
+  Gillenia = c("Gillenia"),
+  Sidalcea = c("Sidalcea"),
+  Tricyrtis = c("Tricyrtis"),
+  Belamcanda = c("Belamcanda"),
+  Heucherella = c("Heucherella"),
+  Ophiopogon = c("Ophiopogon"),
+  Lewisia = c("Lewisia")
+) |> enframe() |>
+  unnest(value) |>
+  dplyr::rename("genus" = name, "common name" = value) |>
+  mutate(dept = "perennials", subdept = "perennials", .before = 1)
+
+succulents <- list(
+  Aloe = c("Aloe", "Aloe"),
+  Agave = c("Agave", "Agave"),
+  Echeveria = c("Echeveria", "Echeveria"),
+  Crassula = c("Crassula", "Jade Plant"),
+  Sedum = c("Sedum", "Stonecrop"),
+  Kalanchoe = c("Kalanchoe", "Kalanchoe"),
+  Haworthia = c("Haworthia", "Haworthia", "Zebra Plant"),
+  Sempervivum = c("Sempervivum", "Hens and Chicks"),
+  Euphorbia = c("Euphorbia", "Spurge"),
+  Gasteria = c("Gasteria", "Gasteria"),
+  Pachyphytum = c("Pachyphytum", "Pachyphytum"),
+  Graptopetalum = c("Graptopetalum", "Ghost Plant"),
+  Aeonium = c("Aeonium", "Aeonium"),
+  Adromischus = c("Adromischus", "Adromischus"),
+  Cotyledon = c("Cotyledon", "Cotyledon"),
+  Dudleya = c("Dudleya", "Dudleya"),
+  Sansevieria = c("Sansevieria", "Snake Plant"),
+  Lithops = c("Lithops", "Living Stone"),
+  Senecio = c("Senecio", "String of Pearls", "Blue Chalksticks"),
+  Portulacaria = c("Portulacaria", "Elephant Bush"),
+  Rhipsalis = c("Rhipsalis", "Mistletoe Cactus"),
+  Schlumbergera = c("Schlumbergera", "Christmas Cactus"),
+  Opuntia = c("Opuntia", "Prickly Pear"),
+  Mammillaria = c("Mammillaria", "Pincushion Cactus"),
+  Ferocactus = c("Ferocactus", "Barrel Cactus"),
+  Echinocactus = c("Echinocactus", "Golden Barrel Cactus"),
+  Gymnocalycium = c("Gymnocalycium", "Chin Cactus"),
+  Astrophytum = c("Astrophytum", "Bishop's Cap Cactus"),
+  Cereus = c("Cereus", "Peruvian Apple Cactus"),
+  Parodia = c("Parodia", "Ball Cactus"),
+  Stenocactus = c("Stenocactus", "Brain Cactus"),
+  Echinopsis = c("Echinopsis", "Hedgehog Cactus"),
+  Rebutia = c("Rebutia", "Crown Cactus"),
+  Notocactus = c("Notocactus", "Balloon Cactus"),
+  Melocactus = c("Melocactus", "Turk's Cap Cactus"),
+  Acanthocereus = c("Acanthocereus", "Triangle Cactus"),
+  Myrtillocactus = c("Myrtillocactus", "Blue Myrtle Cactus"),
+  Cleistocactus = c("Cleistocactus", "Silver Torch Cactus"),
+  Pachycereus = c("Pachycereus", "Cardon"),
+  Epiphyllum = c("Epiphyllum", "Orchid Cactus"),
+  Hylocereus = c("Hylocereus", "Dragon Fruit Cactus"),
+  Disocactus = c("Disocactus", "Rat-Tail Cactus"),
+  Aporocactus = c("Aporocactus", "Rat's Tail Cactus"),
+  Austrocylindropuntia = c("Austrocylindropuntia", "Eve's Needle Cactus"),
+  Eulychnia = c("Eulychnia", "Old Man Cactus"),
+  Matucana = c("Matucana", "Matucana"),
+  Neobuxbaumia = c("Neobuxbaumia", "Giant Mexican Cactus"),
+  Espostoa = c("Espostoa", "Peruvian Old Man Cactus"),
+  Ariocarpus = c("Ariocarpus", "Living Rock Cactus"),
+  Turbinicarpus = c("Turbinicarpus", "Turbinicarpus"),
+  Coryphantha = c("Coryphantha", "Beehive Cactus"),
+  Pilosocereus = c("Pilosocereus", "Blue Torch Cactus"),
+  Selenicereus = c("Selenicereus", "Moonlight Cactus"),
+  Leuchtenbergia = c("Leuchtenbergia", "Agave Cactus")
+) |> enframe() |>
+  unnest(value) |>
+  dplyr::rename("genus" = name, "common name" = value) |>
+  mutate(dept = "house", subdept = "succ", .before = 1)
+
+foliage <- list(
+  Monstera = c("Monstera", "Swiss Cheese Plant"),
+  Ficus = c("Ficus", "Fiddle Leaf Fig", "Weeping Fig", "Rubber Plant"),
+  Philodendron = c("Philodendron", "Philodendron"),
+  Epipremnum = c("Epipremnum", "Pothos", "Devil's Ivy"),
+  Spathiphyllum = c("Spathiphyllum", "Peace Lily"),
+  Dracaena = c("Dracaena", "Dragon Tree", "Corn Plant"),
+  Calathea = c("Calathea", "Prayer Plant"),
+  Maranta = c("Maranta", "Prayer Plant"),
+  Dieffenbachia = c("Dieffenbachia", "Dumb Cane"),
+  Schefflera = c("Schefflera", "Umbrella Plant"),
+  Alocasia = c("Alocasia", "Elephant Ear"),
+  Zamioculcas = c("Zamioculcas", "ZZ Plant"),
+  Chlorophytum = c("Chlorophytum", "Spider Plant"),
+  Asplenium = c("Asplenium", "Bird's Nest Fern"),
+  Nephrolepis = c("Nephrolepis", "Boston Fern"),
+  Pteris = c("Pteris", "Brake Fern"),
+  Aglaonema = c("Aglaonema", "Chinese Evergreen"),
+  Aspidistra = c("Aspidistra", "Cast Iron Plant"),
+  Codiaeum = c("Codiaeum", "Croton"),
+  Anthurium = c("Anthurium", "Flamingo Flower"),
+  Chamaedorea = c("Chamaedorea", "Parlor Palm"),
+  Adiantum = c("Adiantum", "Maidenhair Fern"),
+  Peperomia = c("Peperomia", "Radiator Plant"),
+  Acalypha = c("Acalypha", "Copperleaf"),
+  Fittonia = c("Fittonia", "Nerve Plant"),
+  Pilea = c("Pilea", "Chinese Money Plant", "Pilea"),
+  Syngonium = c("Syngonium", "Arrowhead Plant"),
+  Cordyline = c("Cordyline", "Ti Plant"),
+  Beaucarnea = c("Beaucarnea", "Ponytail Palm"),
+  Caladium = c("Caladium", "Caladium", "Elephant Ear"),
+  Stromanthe = c("Stromanthe", "Tricolor Ginger"),
+  Musa = c("Musa", "Banana Plant"),
+  Tradescantia = c("Tradescantia", "Wandering Jew"),
+  Araucaria = c("Araucaria", "Norfolk Island Pine"),
+  Hedera = c("Hedera", "English Ivy"),
+  Pothos = c("Epipremnum", "Golden Pothos", "Marble Queen Pothos"),
+  Syngonium = c("Syngonium", "Nephthytis", "Arrowhead Vine"),
+  Rhapis = c("Rhapis", "Lady Palm"),
+  Ctenanthe = c("Ctenanthe", "Never Never Plant"),
+  Rhoeo = c("Rhoeo", "Oyster Plant", "Moses-in-the-Cradle"),
+  Caryota = c("Caryota", "Fishtail Palm"),
+  Rhaphidophora = c("Rhaphidophora", "Mini Monstera"),
+  Begonia = c("Begonia", "Rex Begonia", "Angel Wing Begonia"),
+  Calocephalus = c("Calocephalus", "Silver Bush"),
+  Pandanus = c("Pandanus", "Screw Pine"),
+  Aspidistra = c("Aspidistra", "Cast Iron Plant"),
+  Pilea = c("Pilea", "Aluminum Plant"),
+  Soleirolia = c("Soleirolia", "Baby's Tears"),
+  Neoregelia = c("Neoregelia", "Blushing Bromeliad"),
+  Guzmania = c("Guzmania", "Guzmania Bromeliad"),
+  Vriesea = c("Vriesea", "Flaming Sword Bromeliad"),
+  Tillandsia = c("Tillandsia", "Air Plant"),
+  Yucca = c("Yucca", "Yucca Cane"),
+  Alpinia = c("Alpinia", "Variegated Ginger"),
+  Strelitzia = c("Strelitzia", "Bird of Paradise"),
+  Phoenix = c("Phoenix", "Pygmy Date Palm"),
+  Schefflera = c("Schefflera", "Umbrella Tree"),
+  Polyscias = c("Polyscias", "Ming Aralia"),
+  Radermachera = c("Radermachera", "China Doll Plant"),
+  Philodendron = c("Philodendron", "Heartleaf Philodendron"),
+  Syngonium = c("Syngonium", "Arrowhead Plant"),
+  Clivia = c("Clivia", "Kaffir Lily"),
+  Aechmea = c("Aechmea", "Urn Plant"),
+  Dracaena = c("Dracaena", "Song of India"),
+  Epipremnum = c("Epipremnum", "Devil's Ivy", "Pothos"),
+  Aglaonema = c("Aglaonema", "Chinese Evergreen")
+) |> enframe() |>
+  unnest(value) |>
+  dplyr::rename("genus" = name, "common name" = value) |>
+  mutate(dept = "house", subdept = "foliage", .before = 1)
+
+bulbs_tubers <- list(
+  Tulipa = c("Tulipa", "Tulip"),
+  Narcissus = c("Narcissus", "Daffodil"),
+  Crocus = c("Crocus", "Crocus"),
+  Dahlia = c("Dahlia", "Dahlia"),
+  Gladiolus = c("Gladiolus", "Gladiolus"),
+  Lilium = c("Lilium", "Lily"),
+  Hyacinthus = c("Hyacinthus", "Hyacinth"),
+  Iris = c("Iris", "Iris"),
+  Begonia = c("Begonia", "Tuberous Begonia"),
+  Cyclamen = c("Cyclamen", "Cyclamen"),
+  Allium = c("Allium", "Ornamental Onion"),
+  Muscari = c("Muscari", "Grape Hyacinth"),
+  Colchicum = c("Colchicum", "Autumn Crocus"),
+  Anemone = c("Anemone", "Windflower"),
+  Fritillaria = c("Fritillaria", "Fritillary"),
+  Scilla = c("Scilla", "Squill"),
+  Erythronium = c("Erythronium", "Dog's Tooth Violet"),
+  Ranunculus = c("Ranunculus", "Buttercup"),
+  Zantedeschia = c("Zantedeschia", "Calla Lily"),
+  Lycoris = c("Lycoris", "Spider Lily"),
+  Galanthus = c("Galanthus", "Snowdrop"),
+  Leucojum = c("Leucojum", "Snowflake"),
+  Crocosmia = c("Crocosmia", "Montbretia"),
+  Canna = c("Canna", "Canna Lily"),
+  Alstroemeria = c("Alstroemeria", "Peruvian Lily"),
+  Tigridia = c("Tigridia", "Tiger Flower")
+) |> enframe() |>
+  unnest(value) |>
+  dplyr::rename("genus" = name, "common name" = value) |>
+  mutate(dept = "perennials", subdept = "bulbs_tubers", .before = 1)
+
+ornamental_grasses <- list(
+  Miscanthus = c("Miscanthus", "Maiden Grass"),
+  Pennisetum = c("Pennisetum", "Fountain Grass"),
+  Festuca = c("Festuca", "Blue Fescue"),
+  Stipa = c("Stipa", "Feather Grass"),
+  Panicum = c("Panicum", "Switchgrass"),
+  Calamagrostis = c("Calamagrostis", "Feather Reed Grass"),
+  Helictotrichon = c("Helictotrichon", "Blue Oat Grass"),
+  Cortaderia = c("Cortaderia", "Pampas Grass"),
+  Carex = c("Carex", "Sedge"),
+  Hakonechloa = c("Hakonechloa", "Japanese Forest Grass"),
+  Molinia = c("Molinia", "Moor Grass"),
+  Schizachyrium = c("Schizachyrium", "Little Bluestem"),
+  Chasmanthium = c("Chasmanthium", "Northern Sea Oats"),
+  Imperata = c("Imperata", "Japanese Blood Grass"),
+  Sporobolus = c("Sporobolus", "Prairie Dropseed"),
+  Andropogon = c("Andropogon", "Big Bluestem"),
+  Arundo = c("Arundo", "Giant Reed"),
+  Eragrostis = c("Eragrostis", "Lovegrass"),
+  Muhlenbergia = c("Muhlenbergia", "Muhly Grass"),
+  Grass = c("grass")
+) |> enframe() |>
+  unnest(value) |>
+  dplyr::rename("genus" = name, "common name" = value) |>
+  mutate(dept = "perennials", subdept = "grass", .before = 1)
+
+aquatic_plants <- list(
+  Nymphaea = c("Nymphaea", "Water Lily"),
+  Eichhornia = c("Eichhornia", "Water Hyacinth"),
+  Nelumbo = c("Nelumbo", "Lotus"),
+  Typha = c("Typha", "Cattail"),
+  Pontederia = c("Pontederia", "Pickerelweed"),
+  Iris = c("Iris", "Water Iris"),
+  Cyperus = c("Cyperus", "Papyrus"),
+  Alisma = c("Alisma", "Water Plantain"),
+  Myriophyllum = c("Myriophyllum", "Water Milfoil"),
+  Sagittaria = c("Sagittaria", "Arrowhead"),
+  Hydrocotyle = c("Hydrocotyle", "Pennywort"),
+  Pistia = c("Pistia", "Water Lettuce"),
+  Aponogeton = c("Aponogeton", "Water Hawthorn"),
+  Hydrangea = c("Hydrangea", "Hydrangea"),
+  Lobelia = c("Lobelia", "Cardinal Flower"),
+  Thalia = c("Thalia", "Powdery Thalia"),
+  Lythrum = c("Lythrum", "Loosestrife"),
+  Juncus = c("Juncus", "Rush"),
+  Acorus = c("Acorus", "Sweet Flag")
+) |> enframe() |>
+  unnest(value) |>
+  dplyr::rename("genus" = name, "common name" = value) |>
+  mutate(dept = "aquatic", subdept = "aquatic", .before = 1)
+
+trees_shrubs <- list(
+  Acer = c("Acer", "Maple"),
+  Quercus = c("Quercus", "Oak"),
+  Rhododendron = c("Rhododendron", "Rhododendron"),
+  Hydrangea = c("Hydrangea", "Hydrangea"),
+  Camellia = c("Camellia", "Camellia"),
+  Cornus = c("Cornus", "Dogwood"),
+  Magnolia = c("Magnolia", "Magnolia"),
+  Ilex = c("Ilex", "Holly"),
+  Prunus = c("Prunus", "Cherry", "Plum"),
+  Buxus = c("Buxus", "Boxwood"),
+  Juniperus = c("Juniperus", "Juniper"),
+  Viburnum = c("Viburnum", "Viburnum"),
+  Berberis = c("Berberis", "Barberry"),
+  Forsythia = c("Forsythia", "Forsythia"),
+  Taxus = c("Taxus", "Yew"),
+  Cotoneaster = c("Cotoneaster", "Cotoneaster"),
+  Ligustrum = c("Ligustrum", "Privet"),
+  Philadelphus = c("Philadelphus", "Mock Orange"),
+  Chaenomeles = c("Chaenomeles", "Flowering Quince"),
+  Euonymus = c("Euonymus", "Spindle Tree"),
+  Cercis = c("Cercis", "Redbud"),
+  Amelanchier = c("Amelanchier", "Serviceberry"),
+  Hamamelis = c("Hamamelis", "Witch Hazel"),
+  Wisteria = c("Wisteria", "Wisteria"),
+  Carpinus = c("Carpinus", "Hornbeam"),
+  Fagus = c("Fagus", "Beech"),
+  Salix = c("Salix", "Willow"),
+  Liriodendron = c("Liriodendron", "Tulip Tree"),
+  Malus = c("Malus", "Crabapple"),
+  Rosa = c("Rosa", "Rose"),
+  Caryopteris = c("Caryopteris"),
+  Hibiscus = c("Hibiscus"),
+  Lagerstroemia = c("Lagerstroemia", "crepe myrtle")
+) |> enframe() |>
+  unnest(value) |>
+  dplyr::rename("genus" = name, "common name" = value) |>
+  mutate(dept = "woody", subdept = "trees", .before = 1)
+
+climbers_vines <- list(
+  Clematis = c("Clematis", "Clematis"),
+  Wisteria = c("Wisteria", "Wisteria"),
+  Lonicera = c("Lonicera", "Honeysuckle"),
+  Passiflora = c("Passiflora", "Passionflower"),
+  Parthenocissus = c("Parthenocissus", "Virginia Creeper"),
+  Hedera = c("Hedera", "Ivy"),
+  Jasminum = c("Jasminum", "Jasmine"),
+  Campsis = c("Campsis", "Trumpet Vine"),
+  Bougainvillea = c("Bougainvillea", "Bougainvillea"),
+  Akebia = c("Akebia", "Chocolate Vine"),
+  Trachelospermum = c("Trachelospermum", "Star Jasmine"),
+  Solanum = c("Solanum", "Potato Vine"),
+  Ipomoea = c("Ipomoea", "Morning Glory"),
+  Thunbergia = c("Thunbergia", "Black-Eyed Susan Vine"),
+  Bignonia = c("Bignonia", "Crossvine"),
+  Mandevilla = c("Mandevilla", "Mandevilla"),
+  Aristolochia = c("Aristolochia", "Dutchman's Pipe"),
+  Vitis = c("Vitis", "Grape Vine"),
+  Clitoria = c("Clitoria", "Butterfly Pea"),
+  Dioscorea = c("Dioscorea", "Air Potato"),
+  Mandevilla = c("Mandevilla", "Dipladenia")
+) |> enframe() |>
+  unnest(value) |>
+  dplyr::rename("genus" = name, "common name" = value) |>
+  mutate(dept = "woody", subdept = "vines", .before = 1)
+
+orchids <- list(
+  Phalaenopsis = c("Phalaenopsis", "Moth Orchid"),
+  Cattleya = c("Cattleya", "Cattleya Orchid"),
+  Dendrobium = c("Dendrobium", "Dendrobium Orchid"),
+  Oncidium = c("Oncidium", "Dancing Lady Orchid"),
+  Paphiopedilum = c("Paphiopedilum", "Lady's Slipper Orchid"),
+  Vanda = c("Vanda", "Vanda Orchid"),
+  Cymbidium = c("Cymbidium", "Boat Orchid"),
+  Miltonia = c("Miltonia", "Pansy Orchid"),
+  Ludisia = c("Ludisia", "Jewel Orchid"),
+  Epidendrum = c("Epidendrum", "Crucifix Orchid"),
+  Zygopetalum = c("Zygopetalum", "Zygopetalum Orchid"),
+  Brassavola = c("Brassavola", "Lady of the Night Orchid"),
+  Masdevallia = c("Masdevallia", "Masdevallia Orchid"),
+  Laelia = c("Laelia", "Laelia Orchid"),
+  Angraecum = c("Angraecum", "Comet Orchid"),
+  Catasetum = c("Catasetum", "Catasetum Orchid"),
+  Coelogyne = c("Coelogyne", "Necklace Orchid"),
+  Phragmipedium = c("Phragmipedium", "Phragmipedium Orchid"),
+  Grammatophyllum = c("Grammatophyllum", "Tiger Orchid"),
+  Lycaste = c("Lycaste", "Lycaste Orchid")
+) |> enframe() |>
+  unnest(value) |>
+  dplyr::rename("genus" = name, "common name" = value) |>
+  mutate(dept = "house", subdept = "orchid", .before = 1)
+
+groundcovers <- list(
+  Pachysandra = c("Pachysandra", "Japanese Spurge"),
+  Ajuga = c("Ajuga", "Bugleweed"),
+  Vinca_minor = c("Vinca_minor", "Periwinkle"),
+  Sedum = c("Sedum", "Stonecrop"),
+  Lamium = c("Lamium", "Dead Nettle"),
+  Cerastium = c("Cerastium", "Snow-in-Summer"),
+  Thymus = c("Thymus", "Creeping Thyme"),
+  Arctostaphylos = c("Arctostaphylos", "Bearberry"),
+  Galium = c("Galium", "Sweet Woodruff"),
+  Tiarella = c("Tiarella", "Foamflower"),
+  Phlox_subulata = c("Phlox_subulata", "Creeping Phlox"),
+  Lysimachia = c("Lysimachia", "Creeping Jenny"),
+  Hosta = c("Hosta", "Plantain Lily"),
+  Heuchera = c("Heuchera", "Coral Bells"),
+  Fragaria = c("Fragaria", "Wild Strawberry"),
+  Waldsteinia = c("Waldsteinia", "Barren Strawberry"),
+  Veronica = c("Veronica", "Creeping Speedwell"),
+  Iberis = c("Iberis", "Candytuft"),
+  Muehlenbeckia = c("Muehlenbeckia", "Creeping Wire Vine"),
+  Mazus = c("Mazus", "Mazus")
+) |> enframe() |>
+  unnest(value) |>
+  dplyr::rename("genus" = name, "common name" = value) |>
+  mutate(dept = "annuals", subdept = "groundcover", .before = 1)
+
+bamboo <- list(
+  Phyllostachys = c("Phyllostachys", "Running Bamboo"),
+  Bambusa = c("Bambusa", "Clumping Bamboo"),
+  Fargesia = c("Fargesia", "Clumping Bamboo"),
+  Pleioblastus = c("Pleioblastus", "Dwarf Bamboo"),
+  Sasa = c("Sasa", "Sasa Bamboo"),
+  Chimonobambusa = c("Chimonobambusa", "Square Bamboo"),
+  Semiarundinaria = c("Semiarundinaria", "Japanese Bamboo"),
+  Indocalamus = c("Indocalamus", "Giant Leaf Bamboo"),
+  Shibataea = c("Shibataea", "Ruscus Leaf Bamboo"),
+  Dendrocalamus = c("Dendrocalamus", "Giant Bamboo"),
+  Thamnocalamus = c("Thamnocalamus", "Mountain Bamboo"),
+  Yushania = c("Yushania", "African Bamboo")
+) |> enframe() |>
+  unnest(value) |>
+  dplyr::rename("genus" = name, "common name" = value) |>
+  mutate(dept = "woody", subdept = "bamboo", .before = 1)
+
+palms_cycads <- list(
+  Chamaedorea = c("Chamaedorea", "Parlor Palm"),
+  Cycas = c("Cycas", "Sago Palm"),
+  Phoenix = c("Phoenix", "Date Palm"),
+  Washingtonia = c("Washingtonia", "Washington Palm"),
+  Trachycarpus = c("Trachycarpus", "Windmill Palm"),
+  Rhapis = c("Rhapis", "Lady Palm"),
+  Bismarckia = c("Bismarckia", "Bismarck Palm"),
+  Livistona = c("Livistona", "Chinese Fan Palm"),
+  Cocos = c("Cocos", "Coconut Palm"),
+  Dypsis = c("Dypsis", "Areca Palm"),
+  Syagrus = c("Syagrus", "Queen Palm"),
+  Sabal = c("Sabal", "Palmetto"),
+  Caryota = c("Caryota", "Fishtail Palm"),
+  Zamia = c("Zamia", "Cardboard Palm"),
+  Encephalartos = c("Encephalartos", "Bread Palm"),
+  Ceratozamia = c("Ceratozamia", "Horned Palm"),
+  Macrozamia = c("Macrozamia", "Burrawang Palm"),
+  Microcycas = c("Microcycas", "Cuban Cycad")
+) |> enframe() |>
+  unnest(value) |>
+  dplyr::rename("genus" = name, "common name" = value) |>
+  mutate(dept = "house", subdept = "tropical", .before = 1)
+
+epiphytes <- list(
+  Tillandsia = c("Tillandsia", "Air Plant"),
+  Bromeliad = c("Bromeliad", "Bromeliad"),
+  Platycerium = c("Platycerium", "Staghorn Fern"),
+  Asplenium = c("Asplenium", "Bird's Nest Fern"),
+  Orchids = c("Orchids", "Orchid"),
+  Hoya = c("Hoya", "Wax Plant"),
+  Rhipsalis = c("Rhipsalis", "Mistletoe Cactus"),
+  Vriesea = c("Vriesea", "Flaming Sword"),
+  Neoregelia = c("Neoregelia", "Blushing Bromeliad"),
+  Dischidia = c("Dischidia", "Ant Plant"),
+  Anthurium = c("Anthurium", "Flamingo Flower"),
+  Guzmania = c("Guzmania", "Guzmania"),
+  Aechmea = c("Aechmea", "Urn Plant"),
+  Cryptanthus = c("Cryptanthus", "Earth Star"),
+  Catopsis = c("Catopsis", "Bladderwort"),
+  Billbergia = c("Billbergia", "Queen's Tears"),
+  Cattleya = c("Cattleya", "Corsage Orchid"),
+  Coelogyne = c("Coelogyne", "Necklace Orchid"),
+  Masdevallia = c("Masdevallia", "Masdevallia Orchid")
+) |> enframe() |>
+  unnest(value) |>
+  dplyr::rename("genus" = name, "common name" = value) |>
+  mutate(dept = "house", subdept = "epiphytes", .before = 1)
+
+carnivorous <- list(
+  Dionaea = c("Dionaea", "Venus Flytrap"),
+  Sarracenia = c("Sarracenia", "Pitcher Plant"),
+  Nepenthes = c("Nepenthes", "Tropical Pitcher Plant"),
+  Drosera = c("Drosera", "Sundew"),
+  Utricularia = c("Utricularia", "Bladderwort"),
+  Pinguicula = c("Pinguicula", "Butterwort"),
+  Cephalotus = c("Cephalotus", "Australian Pitcher Plant"),
+  Darlingtonia = c("Darlingtonia", "Cobra Lily"),
+  Heliamphora = c("Heliamphora", "Sun Pitcher"),
+  Byblis = c("Byblis", "Rainbow Plant"),
+  Genlisea = c("Genlisea", "Corkscrew Plant"),
+  Aldrovanda = c("Aldrovanda", "Waterwheel Plant"),
+  Brocchinia = c("Brocchinia", "Brocchinia"),
+  Roridula = c("Roridula", "Roridula"),
+  Drosophyllum = c("Drosophyllum", "Dewy Pine")
+) |> enframe() |>
+  unnest(value) |>
+  dplyr::rename("genus" = name, "common name" = value) |>
+  mutate(dept = "house", subdept = "carnivorous", .before = 1)
+
+ferns <- list(
+  Pteris = c("Pteris", "Brake Fern"),
+  Nephrolepis = c("Nephrolepis", "Boston Fern"),
+  Asplenium = c("Asplenium", "Bird's Nest Fern"),
+  Polystichum = c("Polystichum", "Sword Fern"),
+  Adiantum = c("Adiantum", "Maidenhair Fern"),
+  Cyrtomium = c("Cyrtomium", "Holly Fern"),
+  Athyrium = c("Athyrium", "Lady Fern"),
+  Dryopteris = c("Dryopteris", "Wood Fern"),
+  Platycerium = c("Platycerium", "Staghorn Fern"),
+  Blechnum = c("Blechnum", "Deer Fern"),
+  Dicksonia = c("Dicksonia", "Tree Fern"),
+  Osmunda = c("Osmunda", "Cinnamon Fern"),
+  Matteuccia = c("Matteuccia", "Ostrich Fern"),
+  Woodwardia = c("Woodwardia", "Chain Fern"),
+  Davallia = c("Davallia", "Rabbit's Foot Fern"),
+  Microsorum = c("Microsorum", "Kangaroo Fern"),
+  Cibotium = c("Cibotium", "Hawaiian Tree Fern"),
+  Lygodium = c("Lygodium", "Climbing Fern"),
+  Marsilea = c("Marsilea", "Water Clover"),
+  Thelypteris = c("Thelypteris", "maiden fern")
+) |> enframe() |>
+  unnest(value) |>
+  dplyr::rename("genus" = name, "common name" = value) |>
+  mutate(dept = "house", subdept = "fern", .before = 1)
+
+seasonal <- list(
+  Euphorbia = c("Euphorbia", "Poinsettia"),
+  Chrysanthemum = c("Chrysanthemum", "Mum"),
+  Cyclamen = c("Cyclamen", "Cyclamen"),
+  Primula = c("Primula", "Primrose"),
+  Hippeastrum = c("Hippeastrum", "Amaryllis"),
+  Kalanchoe = c("Kalanchoe", "Kalanchoe"),
+  Helleborus = c("Helleborus", "Christmas Rose", "Lenten Rose"),
+  Viola = c("Viola", "Pansy", "Viola"),
+  Lilium = c("Lilium", "Easter Lily"),
+  Ilex = c("Ilex", "Holly"),
+  Gaultheria = c("Gaultheria", "Wintergreen"),
+  Erica = c("Erica", "Heather"),
+  Hyacinthus = c("Hyacinthus", "Hyacinth"),
+  Narcissus = c("Narcissus", "Daffodil"),
+  Tulipa = c("Tulipa", "Tulip"),
+  Phalaenopsis = c("Phalaenopsis", "Moth Orchid"),
+  Euphorbia_milii = c("Euphorbia_milii", "Crown of Thorns"),
+  Solanum_pseudocapsicum = c("Solanum_pseudocapsicum", "Jerusalem Cherry"),
+  Ardisia = c("Ardisia", "Coral Berry"),
+  Aster = c("Aster", "Michaelmas Daisy"),
+  Amaryllis_belladonna = c("Amaryllis_belladonna", "Naked Lady"),
+  Camellia = c("Camellia", "Camellia"),
+  Gardenia = c("Gardenia", "Gardenia"),
+  Poinciana = c("Poinciana", "Royal Poinciana"),
+  Alstroemeria = c("Alstroemeria", "Peruvian Lily"),
+  Cyclamen_persicum = c("Cyclamen_persicum", "Florist's Cyclamen"),
+  Crocus = c("Crocus", "Crocus"),
+  Azalea = c("Rhododendron", "Azalea"),
+  Gaillardia = c("Gaillardia", "Blanket Flower"),
+  Celosia = c("Celosia", "Cockscomb"),
+  Aster = c("Aster_novi-belgii", "New York Aster"),
+  Salvia_farinacea = c("Salvia_farinacea", "Mealycup Sage"),
+  Cineraria = c("Pericallis", "Florist's Cineraria"),
+  Dianthus_caryophyllus = c("Dianthus_caryophyllus", "Carnation"),
+  Amaranthus = c("Amaranthus", "Love-lies-bleeding"),
+  Pennisetum_glaucum = c("Pennisetum_glaucum", "Purple Fountain Grass")
+) |> enframe() |>
+  unnest(value) |>
+  dplyr::rename("genus" = name, "common name" = value) |>
+  mutate(dept = "annuals", subdept = "seasonal", .before = 1)
+
+other <- list(
+  pot = c("pot", "coex", "Pressure Formed"),
+  media = c("media"),
+  fertilizer = c("fertilizer"),
+  tag = c("tag"),
+  fee = c("fee", "freight", "charge"),
+  lighting = c("Lighting")
+) |> enframe() |>
+  unnest(value) |>
+  dplyr::rename("genus" = name, "common name" = value) |>
+  mutate(dept = "other", subdept = "other", .before = 1)
+
+# Combine all into one list
+plant_classifications <- herbs |> 
+  add_row(vegetables) |> 
+  add_row(fruits) |> 
+  add_row(annuals) |>
+  add_row(perennials) |>
+  add_row(succulents) |>
+  add_row(foliage) |>
+  add_row(bulbs_tubers) |>
+  add_row(ornamental_grasses) |>
+  add_row(aquatic_plants) |>
+  add_row(trees_shrubs) |>
+  add_row(climbers_vines) |>
+  add_row(orchids) |>
+  add_row(groundcovers) |>
+  add_row(bamboo) |>
+  add_row(palms_cycads) |>
+  add_row(epiphytes) |>
+  add_row(carnivorous) |>
+  add_row(ferns) |>
+  add_row(seasonal) |>
+  add_row(other) |>
+  distinct()
+  
+
+```
+
+
 ```{r filter, eval=TRUE}
 
 ## TODO
@@ -386,10 +1253,22 @@ if(!exists("dCluster")) {
   cluster_library_quiety(dCluster, librarian::check_attached())
 }
 
+
+
+plants_classified <- plants_joined |>
+  # partition(dCluster) |>
+  dplyr::mutate(Department = if_else(Description |> str_to_lower() |> str_detect("(^|[:space:])(he)|(vf)|(herb)[:space:]"), "edibles",NA),
+                Description = Description |> str_remove_all("(?<=([:space:]|^))(([Hh][Ee][Rr][Bb])|([Hh][Ee])|([Vv][Ff]))(?=([:space:]|$))") |> str_squish()) |>
+  fuzzy_left_join(plant_classifications, by = c("Description" = "common name"), \(x,y) {str_detect(str_to_lower(x),str_c("(^|[:space:])",str_to_lower(y),"(((es)|s)?($|[:space:]))"))}) #|>
+  # collect()
+plants_classified |>
+  filter(dept |> is.na()) |>
+  view()
+
 plants_filtered <- plants_joined |>
   partition(dCluster) |>
-  dplyr::filter((`Ship Date` >= "20240101" |> ymd())&(`Ship Date` < "20240801" |> ymd()),
-                Supplier |> str_equal("Kube Pak"),
+  dplyr::filter((`Ship Date` >= "20230701" |> ymd())&(`Ship Date` < "20240101" |> ymd()),
+                # Supplier |> str_equal("Kube Pak"),
                 (Description |> str_detect("(^|[:space:])(HE)|(VF)[:space:]"))|(`Customer PO #` |> str_to_lower() |> str_detect("(herb)|(veg)"))) |>
   # dplyr::mutate(Description = Description |> str_remove_all("(?<=([:space:]|^))((herb)|(he)|(vf))(?=([:space:]|$))") |> str_squish()) |>
   collect()
@@ -397,7 +1276,7 @@ plants_filtered <- plants_joined |>
 
 
 tags_filtered <- mtag_orders |>
-  dplyr::filter((`Estimated Ship Date` >= "20240101" |> ymd())&(`Estimated Ship Date` < "20240701" |> ymd()),
+  dplyr::filter((`Estimated Ship Date` >= "20230701" |> ymd())&(`Estimated Ship Date` < "20240101" |> ymd()),
                 str_detect(`PO #` |> str_to_lower(),"(herb)|(veg)|(daniel)"))
 
 ```
@@ -457,7 +1336,7 @@ plants_joined %<>%
                            .default = "other"))
 
 
-write_xlsx(plants_joined, path = plants_dir |> fs::path("2024", "ball express 2024", "fall2024_ball&express_v0.1.xlsx"))
+write_xlsx(plants_joined, path = plants_dir |> fs::path("2024", "ball express fall 2024", "fall2024_ball&express_v0.1.xlsx"))
 ```
 
 ```{r averages, eval=FALSE}
