@@ -278,6 +278,26 @@ mtag_orders <- foreach::foreach(i=order_files(mtag_files, baseName = mtag_baseNa
                   # "MT Item Description" = `MT Item Description` |> str_remove_all("[:punct:]|®|™") |> str_squish() |> str_to_lower())
 
 
+# Import from finished product suppliers
+# including: Cavanos, George Radebaugh, John Radebaugh, Hillcrest, & Tidal Creek
+cavanos_path <- plants_dir |> fs::path("Other Suppliers Invoices", "Cavanos Perennials", "Cavanos Invoices.xlsx")
+george_radebaugh_path <- plants_dir |> fs::path("Other Suppliers Invoices", "George Radebaugh", "George Radebaugh Wholesale Growers Invoices.xlsx")
+john_radebaugh_path <- plants_dir |> fs::path("Other Suppliers Invoices", "John Radebaugh", "John Radebaugh Greenhouses Invoices.xlsx")
+hillcrest_path <- plants_dir |> fs::path("Other Suppliers Invoices", "Hillcrest Nursery", "Hillcrest Nursery Invoices.xlsx")
+tidal_creek_path <- plants_dir |> fs::path("Other Suppliers Invoices", "Tidal Creek", "TidalCreekGrowers2023q1.xlsx")
+
+cavanos_data <- cavanos_path |> read_xlsx(col_types = c(rep("text",2),rep("date",2),rep("text",10),rep("numeric",8)))
+g_radebaugh_data <- george_radebaugh_path |> read_xlsx(col_types = c(rep("text",2),rep("date",2),rep("text",10),rep("numeric",8)))
+j_radebaugh_data <- john_radebaugh_path |> read_xlsx(col_types = c(rep("text",2),rep("date",2),rep("text",10),rep("numeric",8)))
+hillcrest_data <- hillcrest_path |> read_xlsx(col_types = c(rep("text",2),rep("date",2),rep("text",9),rep("numeric",7)))
+tidal_creek_data <- tidal_creek_path |> read_xlsx(col_types = c("text", "text", "date", "date", rep("text",8), rep("numeric",5)))
+
+finished_product_data <- full_join(cavanos_data, g_radebaugh_data) |> 
+  full_join(j_radebaugh_data) |>
+  full_join(hillcrest_data) |>
+  full_join(tidal_creek_data)
+
+
 ```
 
 ```{r singlefileimport, eval=FALSE}
