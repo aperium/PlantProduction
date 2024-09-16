@@ -29,7 +29,7 @@ if (length(installer_pacs) > 0) pak::pak(installer_pacs, upgrade = TRUE)
 # install and load R pacs
 r_pacs <- c(cran_pacs,dev_pacs,bioc_pacs) |> unique()
 if (length(r_pacs) > 0) {
-  pak::pak(r_pacs, upgrade = TRUE)
+  pak::pak(r_pacs, upgrade = FALSE)
   librarian::shelf(r_pacs)
 }
 
@@ -1267,9 +1267,9 @@ plants_classified <- plants_joined |>
     }) #|>
   # collect()
 ## TO VIEW WHAT ISN'T CAPTURED IN ASSIGNMENTS
-plants_classified |>
-  filter(dept |> is.na()) |>
-  view()
+# plants_classified |>
+#   filter(dept |> is.na()) |>
+#   view()
 
 plants_filtered <- plants_classified |>
   partition(dCluster) |>
