@@ -295,7 +295,8 @@ tidal_creek_data <- tidal_creek_path |> read_xlsx(col_types = c("text", "text", 
 finished_product_data <- full_join(cavanos_data, g_radebaugh_data) |> 
   full_join(j_radebaugh_data) |>
   full_join(hillcrest_data) |>
-  full_join(tidal_creek_data)
+  full_join(tidal_creek_data) |>
+  mutate(type = "finished")
 
 
 ```
@@ -369,6 +370,11 @@ con <- DBI::dbConnect(drv = odbc::odbc(), dsn = odbc::odbcListDataSources() |> t
 
 ```{r e_b_join}
 
+if(is_null(getDefaultCluster())) {
+  makeCluster(n_cores-1) |> setDefaultCluster()
+  registerDoParallel(getDefaultCluster())
+}
+
 # need a function for extracting and alighning the plug tray sizes (etc)
 e_combined$Size |> unique()
 b_orders$Size |> unique()
@@ -390,9 +396,27 @@ alignment <- c("vendor" = "vendor",
 b_keep_cols <- alignment |> unname() |> c("Reference Number") |> unique()
 
 plants_joined <- full_join(e_combined, b_orders, by=alignment) |>
-  select(names(alignment)) ## |>
+  select(names(alignment)) |>
+  # partition(dCluster) |>
+  mutate(type = case_when(
+    Size |> str_detect(regex("[:digit:]{2}C", ignore_case = T)) ~ "plug",
+    Size |> str_detect(regex("[:digit:]{3}C", ignore_case = T)) ~ "plug",
+    Size |> str_detect(regex("[:digit:]{3}SS", ignore_case = T)) ~ "plug",
+    Size |> str_detect(regex("((lin)|(split)|(plug)|(cust(pl)?)|(b?kit))([:space:]PW)?[:space:]+[:digit:]{2}[:digit:]?", ignore_case = T)) ~ "plug",
+    Size |> str_detect(regex("(MPL)|([:digit:]+[KHM])", ignore_case = T)) ~ "seed",
+    Size |> str_detect(regex("(URC)|(callus)|(unrooted)", ignore_case = T)) ~ "urc",
+    Size |> str_detect(regex("(brt)|(bareroot)", ignore_case = T)) ~ "bareroot",
+    Size |> str_detect(regex("TAG", ignore_case = T)) ~ "tag",
+    Size |> str_detect(regex("pot", ignore_case = T)) ~ "pot",
+    Size |> str_detect(regex("tray", ignore_case = T)) ~ "tray",
+    .default = as.character(Size)
+  )) ##|>
+    # collect()
+  ## |>
   # rowwise() |>
   # mutate(Description = Description |> str_to_lower() |> str_extract_all("([:alpha:]{2,})|([:digit:]*(\\.[:digit:]+)(?!C$))", simplify = TRUE) |> str_squish() |> unique() |> as.character() |> str_flatten(collapse = " "))
+
+plants_joined$type |> unique()
 
 ```
 
