@@ -296,7 +296,8 @@ finished_product_data <- full_join(cavanos_data, g_radebaugh_data) |>
   full_join(j_radebaugh_data) |>
   full_join(hillcrest_data) |>
   full_join(tidal_creek_data) |>
-  mutate(type = "finished")
+  mutate(type = "finished") |>
+  mutate(across(where(is.character),str_squish))
 
 
 ```
@@ -397,26 +398,45 @@ b_keep_cols <- alignment |> unname() |> c("Reference Number") |> unique()
 
 plants_joined <- full_join(e_combined, b_orders, by=alignment) |>
   select(names(alignment)) |>
+  mutate(across(where(is.character),str_squish)) |>
   # partition(dCluster) |>
   mutate(type = case_when(
     Size |> str_detect(regex("[:digit:]{2}C", ignore_case = T)) ~ "plug",
     Size |> str_detect(regex("[:digit:]{3}C", ignore_case = T)) ~ "plug",
     Size |> str_detect(regex("[:digit:]{3}SS", ignore_case = T)) ~ "plug",
-    Size |> str_detect(regex("((lin)|(split)|(plug)|(cust(pl)?)|(b?kit))([:space:]PW)?[:space:]+[:digit:]{2}[:digit:]?", ignore_case = T)) ~ "plug",
+    Size |> str_detect(regex("((lin)|(split)|(plug)|(cust((pl)|(ln))?)|(b?kit)|(pu?nch))([:space:]PW)?[:space:]+[:digit:]{2}[:digit:]?", ignore_case = T)) ~ "plug",
+    Size |> str_detect(regex("Oasis[:space:]+WD", ignore_case = T)) ~ "plug",
+    Size |> str_detect(regex("Pull[:space:]+Pack", ignore_case = T)) ~ "plug",
+    Size |> str_detect(regex("^21$", ignore_case = T)) ~ "plug",
     Size |> str_detect(regex("(MPL)|([:digit:]+[KHM])", ignore_case = T)) ~ "seed",
-    Size |> str_detect(regex("(URC)|(callus)|(unrooted)", ignore_case = T)) ~ "urc",
-    Size |> str_detect(regex("(brt)|(bareroot)", ignore_case = T)) ~ "bareroot",
+    Size |> str_detect(regex("(URC)|(callus)|(unrooted)|(Pre[:space:]+Intr)", ignore_case = T)) ~ "urc",
+    Size |> str_detect(regex("(brt)|(bareroot)|(BB[:space:]+[:alnum:]+)", ignore_case = T)) ~ "bareroot",
+    Size |> str_detect(regex("(Kit 8\")", ignore_case = T)) ~ "bareroot",
+    Size |> str_detect(regex("Dor[:digit:][:space:]+[:digit:]\\+C", ignore_case = T)) ~ "bareroot",
     Size |> str_detect(regex("TAG", ignore_case = T)) ~ "tag",
     Size |> str_detect(regex("pot", ignore_case = T)) ~ "pot",
     Size |> str_detect(regex("tray", ignore_case = T)) ~ "tray",
-    .default = as.character(Size)
+    Size |> str_detect(regex("(tower)|(74[:space:]+L(CF)|(FC))", ignore_case = T)) ~ "media",
+    Size |> str_detect(regex("(4.7[:space:]+Gal)|(5[:space:]+Pounds)", ignore_case = T)) ~ "fertilizer",
+    Size |> str_detect(regex("AM[:space:]+[:digit:]\\.?[:digit:]?[:space:]+ft", ignore_case = T)) ~ "lighting",
+    Size |> str_detect(regex("(2.2S)|(le)", ignore_case = T)) ~ "lighting",
+    Size |> str_detect(regex("fnsh", ignore_case = T)) ~ "finished",
+    Size |> str_detect(regex("(bench)|(sign)|(banner)", ignore_case = T)) ~ "signage",
+    .default = Size |> str_squish() |> as.character()
   )) ##|>
     # collect()
   ## |>
   # rowwise() |>
   # mutate(Description = Description |> str_to_lower() |> str_extract_all("([:alpha:]{2,})|([:digit:]*(\\.[:digit:]+)(?!C$))", simplify = TRUE) |> str_squish() |> unique() |> as.character() |> str_flatten(collapse = " "))
 
-plants_joined$type |> unique()
+# checking what isn't categorized yet
+# plants_joined |>
+#   group_by(type) |>
+#   summarise(lines = n(), qty = sum(`QTY Ordered`)) |>
+#   arrange(desc(qty))
+# 
+# plants_joined |>
+#   filter(type |> is.na())
 
 ```
 
@@ -451,7 +471,7 @@ herbs <- list(
   Capsicum = c("Capsicum", "Chili Pepper", "Paprika", "Cayenne Pepper"),
   Schinus = c("Schinus", "Pink Peppercorn"),
   Elettaria = c("Elettaria", "Cardamom"),
-  Apium = c("Apium", "Celery", "Lovage"),
+  Apium = c("Apium", "Lovage"),
   Nigella = c("Nigella", "Black Cumin", "Nigella"),
   Perilla = c("Perilla", "Shiso"),
   Sesamum = c("Sesamum", "Sesame"),
@@ -1317,12 +1337,53 @@ plants_classified <- plants_joined |>
 
 plants_filtered <- plants_classified |>
   partition(dCluster) |>
-  dplyr::filter((`Ship Date` >= "20240101" |> ymd())&(`Ship Date` < "20250101" |> ymd()),
-                (str_detect(dept,"edible"))) |> # |str_detect(Department,"edible")))|>
+  dplyr::filter(str_equal(type,"plug") | str_equal(type,"finished"),
+                (`Ship Date` >= "20231101" |> ymd())&(`Ship Date` < "20250101" |> ymd()),
+                (str_detect(dept,"edible")),
+                !is.na(dept)) |> # |str_detect(Department,"edible")))|>
                 # Supplier |> str_equal("Kube Pak"),
                 # (Description |> str_detect("(^|[:space:])(HE)|(VF)[:space:]"))|(`Customer PO #` |> str_to_lower() |> str_detect("(herb)|(veg)"))) |>
   # dplyr::mutate(Description = Description |> str_remove_all("(?<=([:space:]|^))((herb)|(he)|(vf))(?=([:space:]|$))") |> str_squish()) |>
   collect()
+
+finished_product_filtered <- finished_product_data |>
+  mutate(`ship date` = if_else(!is.na(`ship date`),`ship date`, `invoice date`)) |>
+  fuzzy_left_join(plant_classifications, by = c("Item Description" = "common name"), \(x,y) {
+    str_detect(str_to_lower(x),str_c("(^|[:space:])",str_to_lower(y),"(((es)|s)?($|[:space:]))"))
+    }) |>
+  partition(dCluster) |>
+  dplyr::filter(str_equal(type,"plug") | str_equal(type,"finished"),
+                (`ship date` >= "20231101" |> ymd())&(`ship date` < "20250101" |> ymd()),
+                (str_detect(dept,"edible")),
+                !is.na(dept))|>
+  collect()
+
+
+## I think there is a duplication issue when merging with the plant_classifications table TODO
+
+# FIX THIS TODO
+plugs_and_finished_filtered <- full_join(plants_filtered, finished_product_filtered, by = join_by("Ship Date" == "ship date",
+                                                                                                  "Description" == "Item Description",
+                                                                                                  "Size" == "size",
+                                                                                                  "QTY Ordered" == "units",
+                                                                                                  "type",
+                                                                                                  "vendor",
+                                                                                                  "Supplier",
+                                                                                                  "dept", 
+                                                                                                  "subdept",
+                                                                                                  "genus", 
+                                                                                                  "common name",
+                                                                                                  "Order #" == "invoice number",
+                                                                                                  "Order Date" == "invoice date",
+                                                                                                  "Week" == "ship week",
+                                                                                                  "Customer PO #" == "Customer PO Number",
+                                                                                                  "Product #" == "SKU",
+                                                                                                  "Total" == "net extended price"))
+
+
+
+
+
 
 
 
