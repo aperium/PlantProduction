@@ -8,7 +8,7 @@ output: html_notebook
 
 ```{r setup, echo=FALSE, error=TRUE, message=TRUE, warning=TRUE, include=FALSE}
 # this block loads required packages and some custom functions. 
-cran_pacs <- c("tidyverse","writexl","fs","stringr","rlang","magrittr","stats","foreach", "doParallel", "parallel", "fs", "janitor", "stringr","lubridate","forcats", "purrr","multidplyr", "curl", "units", "readxl") #, "rvest", "chromote","httr2"
+cran_pacs <- c("tidyverse","writexl","fs","stringr","rlang","magrittr","stats","foreach", "doParallel", "parallel", "fs", "janitor", "stringr","lubridate","forcats", "purrr","multidplyr", "curl", "units", "readxl", "rvest") #, "chromote","httr2"
 dev_pacs <- c() 
 bioc_pacs <- c()
 py_pacs <- c()
@@ -34,8 +34,8 @@ if (length(py_pacs)>0) {
 
 ## register cores for foreach/doParallel
 n_cores <- case_match(.Platform$OS.type,
-                      "windows" ~ (parallel::detectCores() * 5/9) |> round(),
-                      .default = parallel::detectCores() - 1)
+                      "windows" ~ (parallel::detectCores() * 3/4) |> floor() |> max(1),
+                      .default = (parallel::detectCores() - 1) |> max(1))
 # registerDoParallel(cores=n_cores)
 # stopImplicitCluster()
 
@@ -50,5 +50,21 @@ dCluster <- new_cluster(n_cores)
 cluster_library_quiety <- purrr::quietly(cluster_library)
 # cluster_library_quiety(dCluster, loadedNamespaces())
 cluster_library_quiety(dCluster, librarian::check_attached())
+```
+Example web page to download: https://www.ballseed.com/WEBTRACKPLANTINFO.ASPX?PHID=009100001042010&env=P
+
+The plan is to iterate through all possible PHID numbers and download non-empty pages. Then I can organize them based on field. 
+
+```{r}
+
+url <- "https://www.ballseed.com/WEBTRACKPLANTINFO.ASPX?PHID=009100001042010&env=P"
+
+page <- read_html(url)
+common_name <- page |> html_elements(".info-title") |> html_text()
+data <- page |> html_elements(".prod-subhead, .info-title, p")
+data[6] |> html_name()
+data[6] |> html_text2()
+
+
 ```
 
