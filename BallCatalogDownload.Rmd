@@ -1,0 +1,54 @@
+---
+title: "Ball Catalog Download"
+date: 1 October 2024
+output: html_notebook
+---
+
+
+
+```{r setup, echo=FALSE, error=TRUE, message=TRUE, warning=TRUE, include=FALSE}
+# this block loads required packages and some custom functions. 
+cran_pacs <- c("tidyverse","writexl","fs","stringr","rlang","magrittr","stats","foreach", "doParallel", "parallel", "fs", "janitor", "stringr","lubridate","forcats", "purrr","multidplyr", "curl", "units", "readxl") #, "rvest", "chromote","httr2"
+dev_pacs <- c() 
+bioc_pacs <- c()
+py_pacs <- c()
+
+# install installers
+if(length(find.package("pak", quiet = TRUE))==0) install.packages("pak")
+if(length(find.package("librarian", quiet = TRUE))==0) pak::pak("librarian")
+installer_pacs <- Filter(librarian::check_installed, c(if (length(bioc_pacs) > 0) "BiocManager", if (length(py_pacs) > 0) "reticulate"))
+if (length(installer_pacs) > 0) pak::pak(installer_pacs, upgrade = TRUE)
+
+# install and load R pacs
+r_pacs <- c(cran_pacs,dev_pacs,bioc_pacs) |> unique()
+if (length(r_pacs) > 0) {
+  pak::pak(r_pacs, upgrade = FALSE, ask = FALSE)
+  librarian::shelf(r_pacs)
+}
+
+# install python packs
+if (length(py_pacs)>0) {
+  if (!reticulate::py_available(initialize = TRUE)) reticulate::install_python()
+  if (reticulate::py_available(initialize = TRUE)) reticulate::py_install(py_pacs)
+}
+
+## register cores for foreach/doParallel
+n_cores <- case_match(.Platform$OS.type,
+                      "windows" ~ (parallel::detectCores() * 5/9) |> round(),
+                      .default = parallel::detectCores() - 1)
+# registerDoParallel(cores=n_cores)
+# stopImplicitCluster()
+
+# doParallel cluster
+if(!is_null(getDefaultCluster())) stopCluster(getDefaultCluster())
+makeCluster(n_cores) |> setDefaultCluster()
+registerDoParallel(getDefaultCluster())
+
+# dplyr cluster
+if(exists("dCluster")) rm(dCluster)
+dCluster <- new_cluster(n_cores)
+cluster_library_quiety <- purrr::quietly(cluster_library)
+# cluster_library_quiety(dCluster, loadedNamespaces())
+cluster_library_quiety(dCluster, librarian::check_attached())
+```
+
