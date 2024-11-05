@@ -51,3 +51,70 @@ cluster_library_quiety <- purrr::quietly(cluster_library)
 # cluster_library_quiety(dCluster, loadedNamespaces())
 cluster_library_quiety(dCluster, librarian::check_attached())
 ```
+
+
+```{r getData}
+
+datapath <- "Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstreet/Production Planning QC/Test Samples/Fall 2024 PM4 pansy/Medin Soil tests/ph tests fall 2024.xlsx" |> fs::path_home()
+
+data <- datapath |> 
+  read_xlsx() |>
+  mutate(across(where(is.character), as_factor))
+
+```
+
+```{r plot}
+
+# Pansy pH and EC
+
+data |>
+  mutate(date = date |> as.factor()) |> 
+  filter(crop |> str_equal("pansy"),
+         soil |> str_equal("PM4")) |>
+  ggplot(aes(x = date, y = pH, color = `inside/outside`)) +
+    geom_boxplot() +
+    geom_jitter(width = 0.05, height = 0.05) +
+    # facet_wrap(vars(soil)) +
+    theme_minimal()
+
+data |> 
+  filter(crop |> str_equal("pansy"),
+         soil |> str_equal("PM4")) |>
+  ggplot(aes(x = date, y = EC, color = `inside/outside`)) +
+    geom_smooth() +
+    geom_jitter(width = 0.05, height = 0.05) +
+    # facet_wrap(vars(soil)) +
+    theme_minimal()
+
+data |>
+  # mutate(date = date |> as.factor()) |> 
+  filter(crop |> str_equal("pansy")) |>
+  ggplot(aes(x = date, y = pH, color = soil)) +
+    # geom_boxplot() +
+    geom_smooth() +
+    geom_jitter(width = 0.05, height = 0.025) +
+    theme_minimal()
+
+data |>
+  # mutate(date = date |> as.factor()) |> 
+  filter(crop |> str_equal("pansy"),
+         `inside/outside` |> str_equal("inside")) |>
+  ggplot(aes(x = date, y = EC, color = soil)) +
+    # geom_boxplot() +
+    geom_smooth() +
+    geom_jitter(width = 0.05, height = 0.025) +
+    theme_minimal()
+
+# Poinsettia pH
+data |>
+  mutate(date = date |> as.factor()) |> 
+  filter(crop |> str_equal("poinsettia"),
+         soil |> str_equal("promix")) |>
+  ggplot(aes(x = date, y = pH, color = `inside/outside`)) +
+    geom_boxplot() +
+    geom_jitter(width = 0.05, height = 0.05) +
+    # facet_wrap(vars(soil)) +
+    theme_minimal()
+
+```
+
