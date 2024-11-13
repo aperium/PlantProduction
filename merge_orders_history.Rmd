@@ -441,7 +441,7 @@ plants_joined <- full_join(e_combined, b_orders, by=alignment) |>
 ```
 
 ```{r plant_names_classifications}
-# 20241113 much faster now. moved all code to generate table into an external script. Loading externally much faster than reading in as text here.
+# edit 20241113 much faster now. moved all code to generate table into an external script. Loading externally much faster than reading in as text here.
 
 plant_reference_list_path <- plants_dir |> fs::path("supplementary data","plant_reference_list.csv")
 
