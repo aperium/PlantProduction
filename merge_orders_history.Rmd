@@ -457,7 +457,7 @@ if (fs::file_exists(plant_reference_list_path)) {
 
 ```{r filter, eval=TRUE}
 
-## TODO
+## 
 
 if(!exists("dCluster")) {
   dCluster <- new_cluster(n_cores-1)
@@ -468,7 +468,7 @@ if(!exists("dCluster")) {
 
 
 plants_classified <- plants_joined |>
-  # partition(dCluster) |>
+  partition(dCluster) |>
   dplyr::mutate(Department = if_else(Description |> str_to_lower() |> str_detect("(^|[:space:])(he)|(vf)|(herb)[:space:]"), "edibles",NA),
                 Description = Description |> str_remove_all("(?<=([:space:]|^))(([Hh][Ee][Rr][Bb])|([Hh][Ee])|([Vv][Ff]))(?=([:space:]|$))") |> str_squish()) |>
   fuzzy_left_join(plant_classifications, by = c("Description" = "common name"), \(x,y) {
@@ -483,7 +483,7 @@ plants_classified <- plants_joined |>
 plants_filtered <- plants_classified |>
   partition(dCluster) |>
   dplyr::filter(str_equal(type,"plug") | str_equal(type,"finished"),
-                (`Ship Date` >= "20231101" |> ymd())&(`Ship Date` < "20250101" |> ymd()),
+                (`Ship Date` >= "20231101" |> ymd())&(`Ship Date` < "20241101" |> ymd()),
                 (str_detect(dept,"edible")),
                 !is.na(dept)) |> # |str_detect(Department,"edible")))|>
                 # Supplier |> str_equal("Kube Pak"),
@@ -498,15 +498,14 @@ finished_product_filtered <- finished_product_data |>
     }) |>
   partition(dCluster) |>
   dplyr::filter(str_equal(type,"plug") | str_equal(type,"finished"),
-                (`ship date` >= "20231101" |> ymd())&(`ship date` < "20250101" |> ymd()),
+                (`ship date` >= "20231101" |> ymd())&(`ship date` < "20241101" |> ymd()),
                 (str_detect(dept,"edible")),
                 !is.na(dept))|>
   collect()
 
 
-## I think there is a duplication issue when merging with the plant_classifications table TODO
-
-# FIX THIS TODO
+## There might be a duplication issue when merging with the plant_classifications table. But it might have applied only to previous version. I haven't checked. 20241125
+# FIX THIS TODO??
 plugs_and_finished_filtered <- full_join(plants_filtered, finished_product_filtered, by = join_by("Ship Date" == "ship date",
                                                                                                   "Description" == "Item Description",
                                                                                                   "Size" == "size",
@@ -533,7 +532,7 @@ plugs_and_finished_filtered <- full_join(plants_filtered, finished_product_filte
 
 
 tags_filtered <- mtag_orders |>
-  dplyr::filter((`Estimated Ship Date` >= "20230701" |> ymd())&(`Estimated Ship Date` < "20240101" |> ymd()),
+  dplyr::filter((`Estimated Ship Date` >= "20231101" |> ymd())&(`Estimated Ship Date` < "20241101" |> ymd()),
                 str_detect(`PO #` |> str_to_lower(),"(herb)|(veg)|(daniel)"))
 
 ```
