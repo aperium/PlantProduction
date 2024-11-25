@@ -484,7 +484,7 @@ plants_classified <- plants_joined |>
 plants_filtered <- plants_classified |>
   partition(dCluster) |>
   dplyr::filter(str_equal(type,"plug") | str_equal(type,"finished"),
-                (`Ship Date` >= "20231101" |> ymd())&(`Ship Date` < "20241101" |> ymd()),
+                (`Ship Date` >= "20211101" |> ymd())&(`Ship Date` < "20241101" |> ymd()),
                 (str_detect(dept,"edible")),
                 !is.na(dept)) |> # |str_detect(Department,"edible")))|>
                 # Supplier |> str_equal("Kube Pak"),
@@ -499,7 +499,7 @@ finished_product_filtered <- finished_product_data |>
     }) |>
   partition(dCluster) |>
   dplyr::filter(str_equal(type,"plug") | str_equal(type,"finished"),
-                (`ship date` >= "20231101" |> ymd())&(`ship date` < "20241101" |> ymd()),
+                (`ship date` >= "20211101" |> ymd())&(`ship date` < "20241101" |> ymd()),
                 (str_detect(dept,"edible")),
                 !is.na(dept))|>
   collect()
@@ -592,10 +592,87 @@ aligned %<>%
   #                          str_detect(`Customer PO #`,"^PW")  ~ "PW",
   #                          .default = "other"))
 
-plugs_and_finished_filtered |>
-  mutate(`common name` = `common name` |> str_remove_all("[\\?\\^]")) |>
-  write_xlsx(path = plants_dir |> fs::path("2025", "2024_edibles_v0.31.xlsx"))
+plugs_and_finished_filt_forexport <- plugs_and_finished_filtered |>
+  mutate(`common name` = `common name` |> str_remove_all("[\\?\\^]"),
+         year = `Ship Date` |> year(),
+         wk = `Ship Date` |> isoweek())
+
+plugs_and_finished_filt_forexport |>
+  write_xlsx(path = plants_dir |> fs::path("2025", "2024_edibles_v0.34.xlsx"))
 ```
+
+```{r visualize_a, fig.height=24, fig.width=14}
+
+plugs_and_finished_filt_forexport |>
+  ggplot(aes(x = wk, y = `QTY Ordered`, color = year)) +
+  geom_point() +
+  geom_smooth() +
+  facet_wrap(vars(`common name`), scales = "free_y", ncol = 6) +
+  theme_minimal()
+
+```
+
+```{r summarizing_a, fig.height=22, fig.width=12}
+
+order_spring_sum <- plugs_and_finished_filt_forexport |>
+  filter(wk <29) |>
+  mutate(`common name` = `common name` |> as.factor()) |>
+  group_by(`common name`, year) |>
+  summarise(springsum = `QTY Ordered` |> sum(na.rm = T)) |>
+  ungroup()
+
+
+# lm(springsum ~ year + `common name`, data = order_spring_sum)
+
+pred_2025 <- order_spring_sum |>
+  group_by(`common name`) |>
+  mutate(#std = springsum |> var() |> sqrt(),
+         springsum = if_else(springsum < max(mean(springsum) - sqrt(var(springsum))*1.5, 20), NA, springsum)) |>
+  # mutate(springsum = if_else(springsum < 30, NA, springsum)) |>
+  na.omit() |>
+  summarise(
+    lm2025 = lm(springsum ~ year, data =  cur_data()) |> predict(newdata = tibble(year = 2025)) |> max(0),
+    mean = mean(springsum),
+    pred2025 = sum(lm2025, mean) / if_else(lm2025 * mean <= 0, 1, 2)
+  ) |>
+  mutate(across(where(is.numeric),round))
+
+order_spring_pred_2025 <- pred_2025 |>
+  mutate(`2025` = pred2025) |>
+  select(`common name`, `2025`) |>
+  pivot_longer(cols = `2025`, names_to = "year", values_to = "springsum") |>
+  mutate(year = year |> as.numeric()) |>
+  full_join(order_spring_sum)
+
+order_spring_pred_2025 |>
+  ggplot(aes(x = year, y = `springsum`)) +
+  geom_point() +
+  facet_wrap(vars(`common name`), scales = "free_y", ncol = 6) +
+  theme_minimal()
+
+
+order_spring_pred_2025 |>
+  filter(year == 2025) |>
+  mutate(springsum = ceiling(springsum/288)*288,
+         weeklyTarget = springsum /13,
+         w08 = ceiling(weeklyTarget/288)*288,
+         w09 = ceiling((2*weeklyTarget-w08)/288)*288,
+         w10 = ceiling((3*weeklyTarget-(w08+w09))/288)*288,
+         w11 = ceiling((4*weeklyTarget-(w08+w09+w10))/288)*288,
+         w12 = ceiling((5*weeklyTarget-(w08+w09+w10+w11))/288)*288,
+         w13 = ceiling((6*weeklyTarget-(w08+w09+w10+w11+w12))/288)*288,
+         w14 = ceiling((7*weeklyTarget-(w08+w09+w10+w11+w12+w13))/288)*288,
+         w15 = ceiling((8*weeklyTarget-(w08+w09+w10+w11+w12+w13+w14))/288)*288,
+         w16 = ceiling((9*weeklyTarget-(w08+w09+w10+w11+w12+w13+w14+w15))/288)*288,
+         w17 = ceiling((10*weeklyTarget-(w08+w09+w10+w11+w12+w13+w14+w15+w16))/288)*288,
+         w18 = ceiling((11*weeklyTarget-(w08+w09+w10+w11+w12+w13+w14+w15+w16+w17))/288)*288,
+         w19 = ceiling((12*weeklyTarget-(w08+w09+w10+w11+w12+w13+w14+w15+w16+w17+w18))/288)*288,
+         w20 = ceiling((13*weeklyTarget-(w08+w09+w10+w11+w12+w13+w14+w15+w16+w17+w18+w19))/288)*288)
+```
+
+
+
+
 
 ```{r averages, eval=FALSE}
 
