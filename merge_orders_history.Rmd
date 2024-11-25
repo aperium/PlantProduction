@@ -296,8 +296,9 @@ finished_product_data <- full_join(cavanos_data, g_radebaugh_data) |>
   full_join(j_radebaugh_data) |>
   full_join(hillcrest_data) |>
   full_join(tidal_creek_data) |>
-  mutate(type = "finished") |>
-  mutate(across(where(is.character),str_squish))
+  mutate(type = "finished",
+         across(where(is.character),str_squish),
+         `ship week` = str_c(`ship date` |> year(), `ship date` |> isoweek()))
 
 
 ```
@@ -468,7 +469,7 @@ if(!exists("dCluster")) {
 
 
 plants_classified <- plants_joined |>
-  partition(dCluster) |>
+  # partition(dCluster) |>
   dplyr::mutate(Department = if_else(Description |> str_to_lower() |> str_detect("(^|[:space:])(he)|(vf)|(herb)[:space:]"), "edibles",NA),
                 Description = Description |> str_remove_all("(?<=([:space:]|^))(([Hh][Ee][Rr][Bb])|([Hh][Ee])|([Vv][Ff]))(?=([:space:]|$))") |> str_squish()) |>
   fuzzy_left_join(plant_classifications, by = c("Description" = "common name"), \(x,y) {
@@ -537,7 +538,7 @@ tags_filtered <- mtag_orders |>
 
 ```
 
-```{r mtag_join, eval = TRUE}
+```{r mtag_join, eval = F}
 
 
 plants_prep <- plants_filtered |>
@@ -572,27 +573,28 @@ aligned %<>%
 
 
 ```{r export, eval=TRUE}
-plants_joined %<>%
-  mutate(size = case_when(str_detect(`Customer PO #`,"(^4.5)|(4.5[:space:]?((IN)|(in)|(\")))") ~ "4.5 in",
-                           str_detect(`Customer PO #`,"^804") ~ "804",
-                           str_detect(`Customer PO #`,"(^10)|(10[:space:]?((IN)|(in)|(\"))).*((HB)|(BSKT)|(BASKET))")  ~ "10 in hb",
-                           str_detect(`Customer PO #`,"(^8)|(8[:space:]?((IN)|(in)|(\"))).*((HB)|(BSKT)|(BASKET))")  ~ "8 in hb",
-                           str_detect(`Customer PO #`,"(^12)|(12[:space:]?((IN)|(in)|(\"))).*((HB)|(BSKT)|(BASKET))")  ~ "12 in hb",
-                           str_detect(`Customer PO #`,"(^11)|(11[:space:]?((IN)|(in)|(\"))).*((HB)|(BSKT)|(BASKET))")  ~ "11 in hb",
-                           str_detect(`Customer PO #`,"(^14)|(14[:space:]?((IN)|(in)|(\")))")  ~ "14 in",
-                           str_detect(`Customer PO #`,"(^4)|(4[:space:]?((IN)|(in)|(\")))")  ~ "4 in",
-                           str_detect(`Customer PO #`,"(^6)|(6[:space:]?((IN)|(in)|(\")))")  ~ "6 in",
-                           str_detect(`Customer PO #`,"(^12)|(12[:space:]?((IN)|(in)|(\")))")  ~ "12 in",
-                           str_detect(`Customer PO #`,"(^11)|(11[:space:]?((IN)|(in)|(\")))")  ~ "11 in",
-                           str_detect(`Customer PO #`,"(^10)|(10[:space:]?((IN)|(in)|(\")))")  ~ "10 in",
-                           str_detect(`Customer PO #`,"1[:space:]?((GAL)|(G[:space:])|(G$))")  ~ "1 gal",
-                           str_detect(`Customer PO #`,"((HB)|(BSKT)|(BASKET))")  ~ "10 in hb",
-                           str_detect(`Customer PO #`,"^(liner)|(LINER)")  ~ "liner",
-                           str_detect(`Customer PO #`,"^PW")  ~ "PW",
-                           .default = "other"))
+# plants_joined %<>%
+  # mutate(size = case_when(str_detect(`Customer PO #`,"(^4.5)|(4.5[:space:]?((IN)|(in)|(\")))") ~ "4.5 in",
+  #                          str_detect(`Customer PO #`,"^804") ~ "804",
+  #                          str_detect(`Customer PO #`,"(^10)|(10[:space:]?((IN)|(in)|(\"))).*((HB)|(BSKT)|(BASKET))")  ~ "10 in hb",
+  #                          str_detect(`Customer PO #`,"(^8)|(8[:space:]?((IN)|(in)|(\"))).*((HB)|(BSKT)|(BASKET))")  ~ "8 in hb",
+  #                          str_detect(`Customer PO #`,"(^12)|(12[:space:]?((IN)|(in)|(\"))).*((HB)|(BSKT)|(BASKET))")  ~ "12 in hb",
+  #                          str_detect(`Customer PO #`,"(^11)|(11[:space:]?((IN)|(in)|(\"))).*((HB)|(BSKT)|(BASKET))")  ~ "11 in hb",
+  #                          str_detect(`Customer PO #`,"(^14)|(14[:space:]?((IN)|(in)|(\")))")  ~ "14 in",
+  #                          str_detect(`Customer PO #`,"(^4)|(4[:space:]?((IN)|(in)|(\")))")  ~ "4 in",
+  #                          str_detect(`Customer PO #`,"(^6)|(6[:space:]?((IN)|(in)|(\")))")  ~ "6 in",
+  #                          str_detect(`Customer PO #`,"(^12)|(12[:space:]?((IN)|(in)|(\")))")  ~ "12 in",
+  #                          str_detect(`Customer PO #`,"(^11)|(11[:space:]?((IN)|(in)|(\")))")  ~ "11 in",
+  #                          str_detect(`Customer PO #`,"(^10)|(10[:space:]?((IN)|(in)|(\")))")  ~ "10 in",
+  #                          str_detect(`Customer PO #`,"1[:space:]?((GAL)|(G[:space:])|(G$))")  ~ "1 gal",
+  #                          str_detect(`Customer PO #`,"((HB)|(BSKT)|(BASKET))")  ~ "10 in hb",
+  #                          str_detect(`Customer PO #`,"^(liner)|(LINER)")  ~ "liner",
+  #                          str_detect(`Customer PO #`,"^PW")  ~ "PW",
+  #                          .default = "other"))
 
-
-write_xlsx(plants_joined, path = plants_dir |> fs::path("2024", "ball express fall 2024", "fall2024_ball&express_v0.1.xlsx"))
+plugs_and_finished_filtered |>
+  mutate(`common name` = `common name` |> str_remove_all("[\\?\\^]")) |>
+  write_xlsx(path = plants_dir |> fs::path("2025", "2024_edibles_v0.31.xlsx"))
 ```
 
 ```{r averages, eval=FALSE}
