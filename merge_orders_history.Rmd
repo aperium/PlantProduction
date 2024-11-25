@@ -676,7 +676,7 @@ order_spring_pred_2025 |>
   pivot_wider(names_from = year, values_from = springsum) |>
   mutate(traysize = 288,
          numweeks = 13) |>
-  write_xlsx(path = plants_dir |> fs::path("2025", "2025_edibles_forecast_v0.1.xlsx"))
+  write_xlsx(path = plants_dir |> fs::path("2025", "2025_edibles_forecast_v0.2.xlsx"))
 ```
 
 
