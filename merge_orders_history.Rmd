@@ -644,6 +644,8 @@ order_spring_pred_2025 <- pred_2025 |>
   mutate(year = year |> as.numeric()) |>
   full_join(order_spring_sum)
 
+
+
 order_spring_pred_2025 |>
   ggplot(aes(x = year, y = `springsum`)) +
   geom_point() +
@@ -668,6 +670,13 @@ order_spring_pred_2025 |>
          w18 = ceiling((11*weeklyTarget-(w08+w09+w10+w11+w12+w13+w14+w15+w16+w17))/288)*288,
          w19 = ceiling((12*weeklyTarget-(w08+w09+w10+w11+w12+w13+w14+w15+w16+w17+w18))/288)*288,
          w20 = ceiling((13*weeklyTarget-(w08+w09+w10+w11+w12+w13+w14+w15+w16+w17+w18+w19))/288)*288)
+
+# export 2025 forcast values
+order_spring_pred_2025 |>
+  pivot_wider(names_from = year, values_from = springsum) |>
+  mutate(traysize = 288,
+         numweeks = 13) |>
+  write_xlsx(path = plants_dir |> fs::path("2025", "2025_edibles_forecast_v0.1.xlsx"))
 ```
 
 
