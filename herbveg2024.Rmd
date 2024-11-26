@@ -242,7 +242,7 @@ e_orders <- Express_path |> fs::path("express_open_orders_20240214.xlsx")
 e_delivered <- Express_path |> fs::path("express_shipped_orders_20240214.xlsx")
 
 # output path
-out_path <- "/Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstreet/Production Planning QC/Plant Sales and Orders/2024/herbveg 2024" |> fs::path_home()
+out_path <- "/Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstreet/Production Planning QC/Plant Sales and Orders/" |> str_c(year(now())) |> fs::path_home()
 
 ```
 
@@ -372,7 +372,7 @@ CP_filtersummary <- CP_summary %>%
 
 
 
-```{r CP_calc-tops}
+```{r CP_calc-tops, eval=FALSE}
 
 
 CP_sumtable <- CP_filtersummary
@@ -684,7 +684,7 @@ CP_data <- CP_prediction_itemyear %>%
 
 ```
 
-```{r CP_merge}
+```{r CP_merge, eval=FALSE}
 
 
 CP_data |>
@@ -711,7 +711,7 @@ CP_data |>
 
 
 
-```{r CP_export}
+```{r CP_export, eval=FALSE}
 
 CP_data %>%
   # filter(year >= 2019) %>%
@@ -726,7 +726,7 @@ CP_data %>%
   dplyr::arrange(desc(`2024 Prediction`)) %>%
   as.data.frame() %>%
   # xlsx::write.xlsx2(file = "4.5in-ball-2024analysis-v1.xlsx", sheetName = "CP_4.5in",row.names = FALSE, append = TRUE)
-  write_xlsx_flex("herbveg2024-sales-pred-v1.xlsx")
+  write_xlsx_flex(str_c("herbveg","2025","-sales-pred-v1.xlsx"))
 
 
 ```
