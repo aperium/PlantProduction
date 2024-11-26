@@ -29,7 +29,7 @@ if (length(installer_pacs) > 0) pak::pak(installer_pacs, upgrade = TRUE)
 # install and load R pacs
 r_pacs <- c(cran_pacs,dev_pacs,bioc_pacs) |> unique()
 if (length(r_pacs) > 0) {
-  pak::pak(r_pacs, upgrade = FALSE)
+  pak::pak(r_pacs, upgrade = T)
   librarian::shelf(r_pacs)
 }
 
@@ -460,18 +460,22 @@ if (fs::file_exists(plant_reference_list_path)) {
 
 ## 
 
+
+
 if(!exists("dCluster")) {
   dCluster <- new_cluster(n_cores-1)
   cluster_library_quiety <- purrr::quietly(cluster_library)
   cluster_library_quiety(dCluster, librarian::check_attached())
 }
-
+FILTER_START_DATE <- "20201101" |> ymd()
+FILTER_END_DATE <- "20241101" |> ymd()
+cluster_assign(dCluster, FILTER_START_DATE = "20201101" |> ymd(), FILTER_END_DATE = "20241101" |> ymd())
 
 
 plants_classified <- plants_joined |>
-  # partition(dCluster) |>
   dplyr::mutate(Department = if_else(Description |> str_to_lower() |> str_detect("(^|[:space:])(he)|(vf)|(herb)[:space:]"), "edibles",NA),
                 Description = Description |> str_remove_all("(?<=([:space:]|^))(([Hh][Ee][Rr][Bb])|([Hh][Ee])|([Vv][Ff]))(?=([:space:]|$))") |> str_squish()) |>
+  # partition(dCluster) |>
   fuzzy_left_join(plant_classifications, by = c("Description" = "common name"), \(x,y) {
     str_detect(str_to_lower(x),str_c("(^|[:space:])",str_to_lower(y),"(((es)|s)?($|[:space:]))"))
     }) #|>
@@ -484,7 +488,7 @@ plants_classified <- plants_joined |>
 plants_filtered <- plants_classified |>
   partition(dCluster) |>
   dplyr::filter(str_equal(type,"plug") | str_equal(type,"finished"),
-                (`Ship Date` >= "20211101" |> ymd())&(`Ship Date` < "20241101" |> ymd()),
+                (`Ship Date` >= FILTER_START_DATE)&(`Ship Date` < FILTER_END_DATE),
                 (str_detect(dept,"edible")),
                 !is.na(dept)) |> # |str_detect(Department,"edible")))|>
                 # Supplier |> str_equal("Kube Pak"),
@@ -499,7 +503,7 @@ finished_product_filtered <- finished_product_data |>
     }) |>
   partition(dCluster) |>
   dplyr::filter(str_equal(type,"plug") | str_equal(type,"finished"),
-                (`ship date` >= "20211101" |> ymd())&(`ship date` < "20241101" |> ymd()),
+                (`ship date` >= FILTER_START_DATE)&(`ship date` < FILTER_END_DATE),
                 (str_detect(dept,"edible")),
                 !is.na(dept))|>
   collect()
@@ -597,8 +601,8 @@ plugs_and_finished_filt_forexport <- plugs_and_finished_filtered |>
          year = `Ship Date` |> year(),
          wk = `Ship Date` |> isoweek())
 
-plugs_and_finished_filt_forexport |>
-  write_xlsx(path = plants_dir |> fs::path("2025", "2024_edibles_v0.34.xlsx"))
+# plugs_and_finished_filt_forexport |>
+  # write_xlsx(path = plants_dir |> fs::path("2025", "2024_edibles_v0.34.xlsx"))
 ```
 
 ```{r visualize_a, fig.height=24, fig.width=14}
@@ -672,11 +676,11 @@ order_spring_pred_2025 |>
          w20 = ceiling((13*weeklyTarget-(w08+w09+w10+w11+w12+w13+w14+w15+w16+w17+w18+w19))/288)*288)
 
 # export 2025 forcast values
-order_spring_pred_2025 |>
-  pivot_wider(names_from = year, values_from = springsum) |>
-  mutate(traysize = 288,
-         numweeks = 13) |>
-  write_xlsx(path = plants_dir |> fs::path("2025", "2025_edibles_forecast_v0.2.xlsx"))
+# order_spring_pred_2025 |>
+#   pivot_wider(names_from = year, values_from = springsum) |>
+#   mutate(traysize = 288,
+#          numweeks = 13) |>
+#   write_xlsx(path = plants_dir |> fs::path("2025", "2025_edibles_forecast_v0.2.xlsx"))
 ```
 
 
@@ -714,7 +718,7 @@ averages <- plants_joined |>
 ```
 
 
-```{r terminateClusters, eval=FALSE}
+```{r terminateClusters, eval=TRUE}
 # dplyr cluster
 if(exists("dCluster")) rm(dCluster)
 
