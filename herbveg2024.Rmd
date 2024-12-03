@@ -221,7 +221,7 @@ name_match <- function(x,y) {
 
 ```{r sourcefiles}
 
-prediction_year <- year(now())*1
+prediction_year <- 2025 #year(now())*1
 
 ## define paths
 CP_path <- "/Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstreet/Production Planning QC/Plant Sales and Orders/CP export" |> fs::path_home()
@@ -230,7 +230,7 @@ Express_path <- "/Greenstreet Growers/TeamSite - Documents/Shared/Production Gre
 CH_path <- "/Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstreet/Production Planning QC/Plant Sales and Orders/CommerceHub export" |> fs::path_home()
 
 # CounterPoint Files
-tkt_hist_ln_file <- CP_path %>% fs::dir_ls(regexp = "PS_TKT_HIST_LIN_[[:digit:]]{4}.*\\.(c|C)(s|S)(v|V)")
+tkt_hist_ln_file <- CP_path %>% fs::dir_ls(regexp = "PS_TKT_HIST_LIN_[[:digit:]]{4,8}.*\\.[cC][sS][vV]")
 tkt_hist_file <- fs::path(CP_path, "PS_TKT_HIST.csv")
 item_data_file <- fs::path(CP_path, "IM_ITEM.csv")
 
@@ -242,7 +242,7 @@ e_orders <- Express_path |> fs::path("express_open_orders_20240214.xlsx")
 e_delivered <- Express_path |> fs::path("express_shipped_orders_20240214.xlsx")
 
 # output path
-out_path <- "/Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstreet/Production Planning QC/Plant Sales and Orders/" |> str_c(year(now())) |> fs::path_home()
+out_path <- "/Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstreet/Production Planning QC/Plant Sales and Orders/" |> str_c(prediction_year) |> fs::path_home()
 
 ```
 
@@ -726,7 +726,7 @@ CP_data %>%
   dplyr::arrange(desc(`2024 Prediction`)) %>%
   as.data.frame() %>%
   # xlsx::write.xlsx2(file = "4.5in-ball-2024analysis-v1.xlsx", sheetName = "CP_4.5in",row.names = FALSE, append = TRUE)
-  write_xlsx_flex(str_c("herbveg","2025","-sales-pred-v1.xlsx"))
+  write_xlsx_flex(str_c("2025","-herbveg-sales-pred-v1.xlsx"))
 
 
 ```
