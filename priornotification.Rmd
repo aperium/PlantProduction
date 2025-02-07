@@ -10,9 +10,9 @@ output:
 
 # Todo
 
-- [x] Bug with merging the treatments table. Looks like a full join rather than picking the most recent treatment.
-- [ ] if chromate fails, retry?
-- [x] If the there are blanks in the address fields, fill them all in with google search.
+-   [x] Bug with merging the treatments table. Looks like a full join rather than picking the most recent treatment.
+-   [ ] if chromate fails, retry?
+-   [x] If the there are blanks in the address fields, fill them all in with google search.
 
 ```{r setup, echo=FALSE, error=TRUE, message=TRUE, warning=TRUE, include=FALSE}
 # this block loads required packages and some custom functions. 
@@ -76,7 +76,7 @@ n_cores <- parallel::detectCores()
 
 ```
 
-```{r xlxs_function, echo=FALSE, error=TRUE, message=TRUE, warning=TRUE, include=FALSE}
+```{r xlxs_function, echo=FALSE, error=TRUE, message=TRUE, warning=TRUE, include=FALSE, eval=FALSE}
 # These are some sloppy workarounds for reading and writing data from and to excel files. Some of the readxl and writexl are preferred but they are not universally supported. If they are not installed, these functions use on of the other two packages for xlsx-file handling in the order of preference (openxlsx is preferred over xlsx). For simplicity and robustness many features of the packages are not accessible except where they can be translated 1-to-1 across all three. Ideally, The resulting data should be approximately identical in structure, datatypes, and column names regardless of the function it is using to read or write data.
 
 read_xlsx_flex <- function(path, sheet = NULL, range = NULL, col_names = TRUE) {
@@ -192,16 +192,14 @@ google_get_address <- function(query = NULL) {
 
 ```
 
-
 ## Basic steps
 
-1. import both files
-2. filter for relevant products (not tags)
-2.5. summarize combining multiple tracking numbers onto a single line by order number.
-3. full join using document ID == order number == sales document
-4. filter by relevant states
-5. export each state separately (as new file or appended to existing log)
-6. send emails with attachments.
+1.  import both files
+2.  filter for relevant products (not tags) 2.5. summarize combining multiple tracking numbers onto a single line by order number.
+3.  full join using document ID == order number == sales document
+4.  filter by relevant states
+5.  export each state separately (as new file or appended to existing log)
+6.  send emails with attachments.
 
 ## Import data
 
@@ -281,7 +279,6 @@ treatment_df <- treatment_path |> read_xlsx_flex() |>
 
 ## Join data, filter for ship week, & filter by state
 
-
 ```{r joining}
 
 
@@ -324,7 +321,6 @@ joined_df_b <- joined_df_a |>
 
 
 ```
-
 
 ## export by state
 
