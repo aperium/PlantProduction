@@ -2,7 +2,7 @@
 title: Prior Notifications for interstate shipping of regulated plant materials
 author: Daniel R. Williams ^[Director of Quality Control, Greenstreet Growers, Lothian,
   MD] ^[PhD Candidate, Dept. of Ag. & Crop Science, Ohio State University, Columbus,  Ohio]
-date: 26 January 2024
+date: 07 February 2025
 output:
   pdf_document: default
   html_notebook: default
@@ -209,14 +209,14 @@ google_get_address <- function(query = NULL) {
 ship_week <- today() |> isoweek() |> as.character()
 ship_year <- today() |> year() |> as.character()
 
-dir_path <- "Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstreet/Production Planning QC/Compliance/Ball Liners 2024" |> path_home()
+dir_path <- "Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstreet/Production Planning QC/Compliance/Ball Liners 2025" |> path_home()
 
 orders_path <- dir_path |> path(paste0(ship_year,"w",ship_week),paste0("uninvoiced_",ship_year,"w",ship_week,".xlsx"))
 tracking_path <- dir_path |> path(paste0(ship_year,"w",ship_week),paste0("tracking_",ship_year,"w",ship_week,".xlsx"))
 
 states_path <- dir_path |> path("statestable.xlsx")
 contact_path <- dir_path |> path("contact_info_greenstreet_growers.xlsx")
-treatment_path <- dir_path |> path("treatment_log_2024.xlsx")
+treatment_path <- dir_path |> path("treatment_log_2025.xlsx")
 
 
 ```
