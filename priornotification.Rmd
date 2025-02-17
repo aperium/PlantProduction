@@ -22,7 +22,7 @@ output:
 cran_pacs <- c("rlang", "pkgbuild","rmarkdown", "tidyselect", "tidyverse", "magrittr", "stats", "measurements", "knitr", "foreach", "doParallel", "parallel", "fs", "janitor", "stringr", "readxl", "writexl","fuzzyjoin", "chromote", "pdftools") # "rvest", "polite", "XML", "tabulizer", "reticulate","pak","librarian", "BiocManager"
 dev_pacs <- c() ## "aperium/rutil")
 bioc_pacs <- c("Biostrings")
-py_pacs <- c("camelot-py")
+py_pacs <- c() ## "camelot-py"
 
 # global option to stop prompting for installing from source.
 options(install.packages.check.source = "no")
@@ -60,7 +60,8 @@ loaded_pacs <- search() |> stringr::str_extract("(?<=:).*$") |> na.omit()
 # install python packs
 if (length(py_pacs)>0) {
   if (!requireNamespace("reticulate", quietly = TRUE)[]) install.packages("reticulate", quiet = TRUE)
-  if (!reticulate::py_available(initialize = FALSE)) reticulate::install_python(version = "3.13:latest")
+  # reticulate::use_python("/opt/homebrew/bin/python3")
+  if (!reticulate::py_available(initialize = TRUE)) reticulate::install_python(version = "3.13:latest", optimized = TRUE)
   if (reticulate::py_available(initialize = TRUE)) reticulate::py_install(py_pacs)
 }
 
@@ -206,7 +207,7 @@ google_get_address <- function(query = NULL) {
 ```{r getinput, echo=TRUE, error=TRUE, message=FALSE, warning=TRUE}
 
 # over-ride using current iso_week / year by using number as a character vector eg: "11"
-ship_week <- today() |> isoweek() |> as.character()
+ship_week <- today() |> isoweek() %>% sprintf("%02d",.)
 ship_year <- today() |> year() |> as.character()
 
 dir_path <- "Greenstreet Growers/TeamSite - Documents/Shared/Production Greenstreet/Production Planning QC/Compliance/Ball Liners 2025" |> path_home()
@@ -252,7 +253,8 @@ tracking_df <- tracking_path %>% read_xlsx_flex() %>%
                       mutate(googleaddress = addressq |> google_get_address()) |> 
                       separate_wider_delim(cols = googleaddress, delim = ", ", names = c("Receiving Street","Receiving City","statezip"), too_few = "align_end", too_many = "merge") |>
                       separate_wider_delim(cols = statezip, delim = " ", names = c("Receiving State","Receiving ZIP"), too_few = "align_end", too_many = "merge") |>
-                      select(c("Document No.","Receiving City","Receiving State","Receiving ZIP")),
+                      select(c("Document No.","Receiving City","Receiving State","Receiving ZIP")) |>
+                      distinct(),
                     unmatched = "ignore") |>
   select(-`Receiving Location`, -`Drop Point Location`, -`Drop Point Name`) |>
   distinct(`Supplier Description`,`Customer Name`, `Ship Week`, `Document No.`, .keep_all = TRUE) ## This is a work around for when there are lines for a single order shipping by multiple carriers. Improvement might make a more informed decision about which line to choose. This just picks the first one listed.  
