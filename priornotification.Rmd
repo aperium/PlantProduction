@@ -60,7 +60,7 @@ loaded_pacs <- search() |> stringr::str_extract("(?<=:).*$") |> na.omit()
 # install python packs
 if (length(py_pacs)>0) {
   if (!requireNamespace("reticulate", quietly = TRUE)[]) install.packages("reticulate", quiet = TRUE)
-  if (!reticulate::py_available(initialize = TRUE)) reticulate::install_python()
+  if (!reticulate::py_available(initialize = FALSE)) reticulate::install_python(version = "3.13:latest")
   if (reticulate::py_available(initialize = TRUE)) reticulate::py_install(py_pacs)
 }
 
