@@ -77,7 +77,7 @@ n_cores <- parallel::detectCores()
 
 ```
 
-```{r xlxs_function, echo=FALSE, error=TRUE, message=TRUE, warning=TRUE, include=FALSE, eval=FALSE}
+```{r xlxs_function, echo=FALSE, error=TRUE, message=TRUE, warning=TRUE, include=FALSE, eval=TRUE}
 # These are some sloppy workarounds for reading and writing data from and to excel files. Some of the readxl and writexl are preferred but they are not universally supported. If they are not installed, these functions use on of the other two packages for xlsx-file handling in the order of preference (openxlsx is preferred over xlsx). For simplicity and robustness many features of the packages are not accessible except where they can be translated 1-to-1 across all three. Ideally, The resulting data should be approximately identical in structure, datatypes, and column names regardless of the function it is using to read or write data.
 
 read_xlsx_flex <- function(path, sheet = NULL, range = NULL, col_names = TRUE) {
